@@ -27,35 +27,27 @@ class BottomNavBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 12),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _NavItem(
-                icon: Icons.home_outlined,
-                activeIcon: Icons.home,
-                label: 'Home',
+                iconPath: 'assets/icons_bottom_navigation_bar/home.png',
                 isActive: currentIndex == 0,
                 onTap: () => onTap(0),
               ),
               _NavItem(
-                icon: Icons.play_circle_outline,
-                activeIcon: Icons.play_circle,
-                label: 'Clips',
+                iconPath: 'assets/icons_bottom_navigation_bar/clips.png',
                 isActive: currentIndex == 1,
                 onTap: () => onTap(1),
               ),
               _NavItem(
-                icon: Icons.add_circle_outline,
-                activeIcon: Icons.add_circle,
-                label: 'New',
+                iconPath: 'assets/icons_bottom_navigation_bar/new.png',
                 isActive: currentIndex == 2,
                 onTap: () => onTap(2),
               ),
               _NavItem(
-                icon: Icons.person_outline,
-                activeIcon: Icons.person,
-                label: 'Account',
+                iconPath: 'assets/icons_bottom_navigation_bar/account.png',
                 isActive: currentIndex == 3,
                 onTap: () => onTap(3),
               ),
@@ -68,16 +60,12 @@ class BottomNavBar extends StatelessWidget {
 }
 
 class _NavItem extends StatelessWidget {
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
+  final String iconPath;
   final bool isActive;
   final VoidCallback onTap;
 
   const _NavItem({
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
+    required this.iconPath,
     required this.isActive,
     required this.onTap,
   });
@@ -89,24 +77,15 @@ class _NavItem extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            isActive ? activeIcon : icon,
-            color: isActive ? brandRed : Colors.white.withOpacity(0.6),
-            size: 26,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: isActive ? brandRed : Colors.white.withOpacity(0.6),
-              fontSize: 11,
-              fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-            ),
-          ),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Image.asset(
+          iconPath,
+          width: 28,
+          height: 28,
+          color: isActive ? brandRed : Colors.white,
+          colorBlendMode: BlendMode.srcIn,
+        ),
       ),
     );
   }

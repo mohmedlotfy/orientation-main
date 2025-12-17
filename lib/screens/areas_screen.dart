@@ -3,136 +3,99 @@ import 'package:flutter/material.dart';
 class AreasScreen extends StatelessWidget {
   const AreasScreen({super.key});
 
-  static const Color brandRed = Color(0xFFE50914);
-
   @override
   Widget build(BuildContext context) {
+    final areas = List.generate(10, (index) {
+      return index.isEven ? 'North Coast' : 'Administrative Capital';
+    });
+
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Areas',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        ),
+        centerTitle: true,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // App bar
-            _buildAppBar(context),
-            // Results header
-            _buildResultsHeader(),
-            // Grid
+            RichText(
+              text: const TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'Results ',
+                    style: TextStyle(color: Colors.white, fontSize: 16),
+                  ),
+                  TextSpan(
+                    text: '(10 Areas)',
+                    style: TextStyle(color: Colors.red, fontSize: 16),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
             Expanded(
-              child: _buildAreasGrid(),
+              child: GridView.builder(
+                itemCount: areas.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 16,
+                  crossAxisSpacing: 16,
+                  childAspectRatio: 1.2,
+                ),
+                itemBuilder: (context, index) {
+                  return AreaCard(title: areas[index]);
+                },
+              ),
             ),
           ],
         ),
       ),
     );
   }
-
-  Widget _buildAppBar(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: const Icon(
-              Icons.chevron_left,
-              color: Colors.white,
-              size: 28,
-            ),
-          ),
-          const Expanded(
-            child: Center(
-              child: Text(
-                'Areas',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 28),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildResultsHeader() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        children: [
-          Text(
-            'Results',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          SizedBox(width: 8),
-          Text(
-            '(10 Areas)',
-            style: TextStyle(
-              color: brandRed,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAreasGrid() {
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 2.2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      itemCount: 10,
-      itemBuilder: (context, index) {
-        final isNorthCoast = index % 2 == 0;
-        return _AreaCard(
-          name: isNorthCoast ? 'North Coast' : 'Administrative Capital',
-        );
-      },
-    );
-  }
 }
 
-class _AreaCard extends StatelessWidget {
-  final String name;
+class AreaCard extends StatelessWidget {
+  final String title;
 
-  const _AreaCard({
-    required this.name,
-  });
+  const AreaCard({super.key, required this.title});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withOpacity(0.08),
+            Colors.white.withOpacity(0.03),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
       ),
       child: Center(
         child: Text(
-          name,
+          title,
+          textAlign: TextAlign.center,
           style: const TextStyle(
-            color: Colors.white,
-            fontSize: 13,
+            color: Colors.white70,
+            fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
-          textAlign: TextAlign.center,
         ),
       ),
     );
   }
 }
-

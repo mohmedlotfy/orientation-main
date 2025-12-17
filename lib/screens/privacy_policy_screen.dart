@@ -65,94 +65,11 @@ class PrivacyPolicyScreen extends StatelessWidget {
   }
 
   Widget _buildPolicyIcon() {
-    return Container(
-      width: 80,
-      height: 100,
-      decoration: BoxDecoration(
-        color: const Color(0xFFD4A84B),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Stack(
-        children: [
-          // Clipboard top
-          Positioned(
-            top: -8,
-            left: 25,
-            right: 25,
-            child: Container(
-              height: 16,
-              decoration: BoxDecoration(
-                color: const Color(0xFFB8860B),
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-          ),
-          // Content area
-          Positioned(
-            top: 16,
-            left: 8,
-            right: 8,
-            bottom: 8,
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFF5F5DC),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              padding: const EdgeInsets.all(8),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text(
-                    'Policies',
-                    style: TextStyle(
-                      color: Colors.black87,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildCheckbox(true),
-                      const SizedBox(width: 8),
-                      _buildCheckbox(true),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildCheckbox(false),
-                      const SizedBox(width: 8),
-                      _buildCheckbox(false),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCheckbox(bool checked) {
-    return Container(
-      width: 16,
-      height: 16,
-      decoration: BoxDecoration(
-        color: checked ? Colors.green : Colors.white,
-        border: Border.all(color: Colors.grey),
-        borderRadius: BorderRadius.circular(2),
-      ),
-      child: checked
-          ? const Icon(
-              Icons.check,
-              color: Colors.white,
-              size: 12,
-            )
-          : null,
+    return Image.asset(
+      'assets/images/image_25.png',
+      width: 154,
+      height: 154,
+      fit: BoxFit.contain,
     );
   }
 

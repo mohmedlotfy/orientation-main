@@ -10,8 +10,31 @@ class AuthApi {
     _dioClient.init();
   }
 
+  // TODO: Set to false when backend is ready
+  static const bool _devMode = true;
+
   /// Login with email and password
   Future<AuthResponse> login(String email, String password) async {
+    // Dev mode: bypass backend and login directly
+    if (_devMode) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      final mockUser = UserModel(
+        id: 'dev-user-001',
+        username: email.split('@').first,
+        email: email,
+        role: 'developer',
+      );
+      
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('auth_token', 'dev-token-12345');
+      await prefs.setString('user_id', mockUser.id);
+      await prefs.setString('user_email', mockUser.email);
+      await prefs.setString('user_name', mockUser.username);
+      
+      return AuthResponse(user: mockUser, token: 'dev-token-12345');
+    }
+
     try {
       final response = await _dioClient.dio.post(
         '/auth/login',

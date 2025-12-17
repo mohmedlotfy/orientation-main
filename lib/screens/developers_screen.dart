@@ -3,183 +3,104 @@ import 'package:flutter/material.dart';
 class DevelopersScreen extends StatelessWidget {
   const DevelopersScreen({super.key});
 
-  static const Color brandRed = Color(0xFFE50914);
-
   @override
   Widget build(BuildContext context) {
+    final developers = List.generate(10, (index) {
+      return index.isEven 
+          ? 'assets/developers/Rectangle.png' 
+          : 'assets/developers/Rectangle_1.png';
+    });
+
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Developers',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        ),
+        centerTitle: true,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // App bar
-            _buildAppBar(context),
-            // Results header
-            _buildResultsHeader(),
-            // Grid
+            RichText(
+              text: const TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'Results ',
+                    style: TextStyle(color: Colors.white, fontSize: 16),
+                  ),
+                  TextSpan(
+                    text: '(10 Developers)',
+                    style: TextStyle(color: Colors.red, fontSize: 16),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
             Expanded(
-              child: _buildDevelopersGrid(),
+              child: GridView.builder(
+                itemCount: developers.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 16,
+                  crossAxisSpacing: 16,
+                  childAspectRatio: 1.5,
+                ),
+                itemBuilder: (context, index) {
+                  return DeveloperCard(imagePath: developers[index]);
+                },
+              ),
             ),
           ],
         ),
       ),
     );
   }
-
-  Widget _buildAppBar(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: const Icon(
-              Icons.chevron_left,
-              color: Colors.white,
-              size: 28,
-            ),
-          ),
-          const Expanded(
-            child: Center(
-              child: Text(
-                'Developers',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 28),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildResultsHeader() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        children: [
-          Text(
-            'Results',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          SizedBox(width: 8),
-          Text(
-            '(10 Developers)',
-            style: TextStyle(
-              color: brandRed,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDevelopersGrid() {
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 1.4,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      itemCount: 10,
-      itemBuilder: (context, index) {
-        final isHorizon = index % 2 == 0;
-        return _DeveloperCard(
-          name: isHorizon ? 'HORIZON' : 'EGYPTIAN',
-          subtitle: isHorizon ? 'EGYPT' : 'DEVELOPERS',
-          logoColor: isHorizon ? const Color(0xFFB8860B) : const Color(0xFF008B8B),
-        );
-      },
-    );
-  }
 }
 
-class _DeveloperCard extends StatelessWidget {
-  final String name;
-  final String subtitle;
-  final Color logoColor;
+class DeveloperCard extends StatelessWidget {
+  final String imagePath;
 
-  const _DeveloperCard({
-    required this.name,
-    required this.subtitle,
-    required this.logoColor,
-  });
+  const DeveloperCard({super.key, required this.imagePath});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Logo placeholder
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 30,
-                  height: 30,
-                  decoration: BoxDecoration(
-                    color: logoColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Center(
-                    child: Text(
-                      name == 'HORIZON' ? 'H' : 'E',
-                      style: TextStyle(
-                        color: logoColor,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      style: TextStyle(
-                        color: logoColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        color: logoColor.withOpacity(0.7),
-                        fontSize: 8,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withOpacity(0.08),
+            Colors.white.withOpacity(0.03),
           ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: Colors.white,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.asset(
+            imagePath,
+            fit: BoxFit.contain,
+          ),
         ),
       ),
     );
   }
 }
-

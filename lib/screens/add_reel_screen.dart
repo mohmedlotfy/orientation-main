@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AddReelScreen extends StatefulWidget {
   const AddReelScreen({super.key});
@@ -135,20 +136,16 @@ class _AddReelScreenState extends State<AddReelScreen> {
       onTap: () {
         // Handle media upload
       },
-      child: Container(
-        height: 200,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: const Color(0xFF1A1A1A),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: brandRed,
-            width: 2,
-            style: BorderStyle.solid,
+      child: CustomPaint(
+        painter: _DashedBorderPainter(),
+        child: Container(
+          height: 280,
+          width: double.infinity,
+          margin: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0A0A0A),
+            borderRadius: BorderRadius.circular(10),
           ),
-        ),
-        child: CustomPaint(
-          painter: _DashedBorderPainter(),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -159,9 +156,9 @@ class _AddReelScreenState extends State<AddReelScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                'Add Media',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
+                'Add Reel',
+                style: GoogleFonts.cairo(
+                  color: Colors.white.withOpacity(0.9),
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),
@@ -338,11 +335,11 @@ class _DashedBorderPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
 
-    const dashWidth = 8.0;
-    const dashSpace = 4.0;
+    const dashWidth = 10.0;
+    const dashSpace = 6.0;
     final path = Path()
       ..addRRect(RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, 0, size.width, size.height),
+        Rect.fromLTWH(1, 1, size.width - 2, size.height - 2),
         const Radius.circular(12),
       ));
 

@@ -3,172 +3,114 @@ import 'package:flutter/material.dart';
 class Top10Screen extends StatelessWidget {
   const Top10Screen({super.key});
 
-  static const Color brandRed = Color(0xFFE50914);
-
   @override
   Widget build(BuildContext context) {
+    // Alternating between masaya and the_icon
+    final items = List.generate(10, (index) {
+      return index.isEven 
+          ? 'assets/top10/masaya.png' 
+          : 'assets/top10/the_icon.png';
+    });
+
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // App bar
-            _buildAppBar(context),
-            // Grid
-            Expanded(
-              child: _buildGrid(),
-            ),
-          ],
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Top 10',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        ),
+        centerTitle: true,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: GridView.builder(
+          itemCount: 10,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: 24,
+            crossAxisSpacing: 16,
+            childAspectRatio: 0.75,
+          ),
+          itemBuilder: (context, index) {
+            return Top10Card(
+              rank: index + 1,
+              imagePath: items[index],
+            );
+          },
         ),
       ),
     );
   }
-
-  Widget _buildAppBar(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: const Icon(
-              Icons.chevron_left,
-              color: Colors.white,
-              size: 28,
-            ),
-          ),
-          const Expanded(
-            child: Center(
-              child: Text(
-                'Top 10',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 28), // Balance the back button
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGrid() {
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.8,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      itemCount: 10,
-      itemBuilder: (context, index) {
-        final isEven = index % 2 == 0;
-        return _Top10GridItem(
-          rank: index + 1,
-          title: isEven ? 'masaya' : 'THE ICON',
-          gradientColors: isEven
-              ? const [Color(0xFF4A90A4), Color(0xFF2d6a7a)]
-              : const [Color(0xFF3d3d3d), Color(0xFF2a2a2a)],
-        );
-      },
-    );
-  }
 }
 
-class _Top10GridItem extends StatelessWidget {
+class Top10Card extends StatelessWidget {
   final int rank;
-  final String title;
-  final List<Color> gradientColors;
+  final String imagePath;
 
-  const _Top10GridItem({
+  const Top10Card({
+    super.key,
     required this.rank,
-    required this.title,
-    required this.gradientColors,
+    required this.imagePath,
   });
-
-  static const Color brandRed = Color(0xFFE50914);
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          // Card
-          Positioned(
-            right: 0,
-            top: 0,
-            bottom: 20,
-            left: 30,
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: gradientColors,
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        // Outline number (behind - shifted down/right as shadow)
+        Positioned(
+          left: 0,
+          bottom: -15,
+          child: Image.asset(
+            'assets/top10/${rank}_outline.png',
+            height: 85,
+            fit: BoxFit.contain,
+          ),
+        ),
+        // Card image
+        Positioned(
+          top: 0,
+          right: 0,
+          left: 35,
+          bottom: 35,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
                 ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Center(
-                child: title == 'masaya'
-                    ? Text(
-                        title,
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.8),
-                          fontSize: 20,
-                          fontWeight: FontWeight.w400,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      )
-                    : Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.5),
-                              ),
-                            ),
-                            child: Text(
-                              title,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 2,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.asset(
+                imagePath,
+                fit: BoxFit.cover,
               ),
             ),
           ),
-          // Rank number
-          Positioned(
-            left: -10,
-            bottom: 0,
-            child: Text(
-              '$rank',
-              style: TextStyle(
-                fontSize: 80,
-                fontWeight: FontWeight.w900,
-                fontStyle: FontStyle.italic,
-                foreground: Paint()
-                  ..style = PaintingStyle.stroke
-                  ..strokeWidth = 2
-                  ..color = brandRed,
-              ),
-            ),
+        ),
+        // Filled number (in front)
+        Positioned(
+          left: -8,
+          bottom: -5,
+          child: Image.asset(
+            'assets/top10/$rank.png',
+            height: 85,
+            fit: BoxFit.contain,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
-

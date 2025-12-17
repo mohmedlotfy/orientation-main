@@ -44,76 +44,84 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   }
 
   Widget _buildHeroSection() {
-    return Container(
-      height: 260,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFF5a8a9a),
-            Color(0xFF3a6a7a),
-            Color(0xFF2a5a6a),
-          ],
-        ),
-      ),
+    return SizedBox(
+      height: 280,
       child: Stack(
         children: [
-          // Project title overlay
-          Positioned(
-            top: 60,
-            left: 60,
-            right: 20,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      'Seashore',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.3),
-                        fontSize: 32,
-                        fontWeight: FontWeight.w300,
-                        fontStyle: FontStyle.italic,
-                        letterSpacing: 2,
-                      ),
+          // Background image
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/image_25.png',
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Color(0xFF5a8a9a),
+                        Color(0xFF3a6a7a),
+                        Color(0xFF2a5a6a),
+                      ],
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '||',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.3),
-                        fontSize: 24,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'RAS EL HEKMA',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.5),
-                    fontSize: 10,
-                    letterSpacing: 2,
                   ),
+                );
+              },
+            ),
+          ),
+          // Dark overlay gradient
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.3),
+                    Colors.black.withOpacity(0.1),
+                    Colors.black.withOpacity(0.5),
+                    Colors.black.withOpacity(0.8),
+                  ],
+                  stops: const [0.0, 0.3, 0.7, 1.0],
                 ),
-                const SizedBox(height: 20),
+              ),
+            ),
+          ),
+          // Status bar area with time and icons
+          Positioned(
+            top: 40,
+            left: 16,
+            right: 16,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
                 const Text(
-                  'FULLY FINISHED UNITS',
+                  '0:12',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
+                    fontSize: 12,
                     fontWeight: FontWeight.w500,
-                    letterSpacing: 2,
                   ),
+                ),
+                Row(
+                  children: [
+                    Icon(Icons.signal_cellular_alt, 
+                        color: Colors.white.withOpacity(0.8), size: 14),
+                    const SizedBox(width: 4),
+                    Icon(Icons.wifi, 
+                        color: Colors.white.withOpacity(0.8), size: 14),
+                    const SizedBox(width: 4),
+                    Icon(Icons.battery_full, 
+                        color: Colors.white.withOpacity(0.8), size: 14),
+                  ],
                 ),
               ],
             ),
           ),
           // Back button
           Positioned(
-            top: 50,
+            top: 60,
             left: 16,
             child: GestureDetector(
               onTap: () => Navigator.pop(context),
@@ -121,7 +129,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.3),
+                  color: Colors.black.withOpacity(0.4),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -130,6 +138,67 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                   size: 24,
                 ),
               ),
+            ),
+          ),
+          // Project title overlay
+          Positioned(
+            top: 70,
+            left: 60,
+            right: 20,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Seashore',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 28,
+                        fontWeight: FontWeight.w300,
+                        fontStyle: FontStyle.italic,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          Icon(Icons.circle, 
+                              color: Colors.white.withOpacity(0.6), size: 6),
+                          const SizedBox(width: 2),
+                          Icon(Icons.wifi, 
+                              color: Colors.white.withOpacity(0.6), size: 12),
+                          Icon(Icons.signal_cellular_alt, 
+                              color: Colors.white.withOpacity(0.6), size: 12),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'RAS EL HEKMA',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.6),
+                    fontSize: 9,
+                    letterSpacing: 2,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'FULLY FINISHED UNITS',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.9),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 2,
+                  ),
+                ),
+              ],
             ),
           ),
           // Continue Watching button
@@ -144,7 +213,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2A2A2A),
+                  color: const Color(0xFF2A2A2A).withOpacity(0.9),
                   borderRadius: BorderRadius.circular(25),
                 ),
                 child: const Row(
@@ -155,7 +224,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                       color: Colors.white,
                       size: 18,
                     ),
-                    SizedBox(width: 6),
+                    SizedBox(width: 8),
                     Text(
                       'Continue Watching',
                       style: TextStyle(
@@ -198,7 +267,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                         'SeaShore',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 24,
+                          fontSize: 22,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -207,7 +276,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                         'Ras ElHekma',
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.5),
-                          fontSize: 14,
+                          fontSize: 13,
                         ),
                       ),
                     ],
@@ -216,7 +285,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                 // Action buttons
                 _buildActionButton(Icons.bookmark_outline),
                 _buildActionButton(Icons.phone_outlined),
-                _buildActionButton(Icons.message_outlined),
+                _buildActionButton(Icons.chat_bubble_outline),
                 _buildActionButton(Icons.share_outlined),
               ],
             ),
@@ -238,6 +307,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                 ),
                 const SizedBox(height: 8),
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: Text(
@@ -245,17 +315,15 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.7),
                           fontSize: 13,
-                          height: 1.4,
+                          height: 1.5,
                         ),
                       ),
                     ),
-                    IconButton(
-                      icon: Icon(
-                        Icons.copy,
-                        color: Colors.white.withOpacity(0.5),
-                        size: 20,
-                      ),
-                      onPressed: () {},
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.copy_outlined,
+                      color: Colors.white.withOpacity(0.5),
+                      size: 20,
                     ),
                   ],
                 ),
@@ -283,8 +351,8 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                 fontWeight: FontWeight.w600,
               ),
               tabs: const [
-                Tab(text: 'Inventory'),
                 Tab(text: 'Episodes'),
+                Tab(text: 'Inventory'),
               ],
             ),
           ),
@@ -293,8 +361,8 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
             child: TabBarView(
               controller: _tabController,
               children: [
-                _buildInventoryTab(),
                 _buildEpisodesTab(),
+                _buildInventoryTab(),
               ],
             ),
           ),
@@ -305,61 +373,58 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
 
   Widget _buildActionButton(IconData icon) {
     return Container(
-      margin: const EdgeInsets.only(left: 8),
+      margin: const EdgeInsets.only(left: 12),
       width: 36,
       height: 36,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(
-          color: Colors.white.withOpacity(0.2),
+          color: Colors.white.withOpacity(0.25),
+          width: 1,
         ),
       ),
       child: Icon(
         icon,
-        color: Colors.white.withOpacity(0.7),
+        color: Colors.white.withOpacity(0.8),
         size: 18,
       ),
     );
   }
 
   Widget _buildInventoryTab() {
-    return Column(
-      children: [
-        const Spacer(),
-        // Open Excel Sheet button
-        Padding(
-          padding: const EdgeInsets.all(20),
-          child: SizedBox(
-            width: 180,
-            height: 44,
-            child: ElevatedButton(
-              onPressed: () {},
-              style: ElevatedButton.styleFrom(
-                backgroundColor: brandGreen,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(25),
-                ),
-                elevation: 0,
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: SizedBox(
+          width: 180,
+          height: 44,
+          child: ElevatedButton(
+            onPressed: () {},
+            style: ElevatedButton.styleFrom(
+              backgroundColor: brandGreen,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(25),
               ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.grid_view, size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    'Open Excel Sheet',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
+              elevation: 0,
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.grid_view, size: 18),
+                SizedBox(width: 8),
+                Text(
+                  'Open Excel Sheet',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
-      ],
+      ),
     );
   }
 
@@ -389,32 +454,38 @@ class _EpisodeItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 14),
       child: Row(
         children: [
           // Thumbnail
           Container(
-            width: 80,
-            height: 60,
+            width: 90,
+            height: 65,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF4a6741), Color(0xFF3a5731)],
-              ),
               borderRadius: BorderRadius.circular(8),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFFD4A574),
+                  Color(0xFFC49A6C),
+                  Color(0xFFB8906A),
+                ],
+              ),
             ),
-            child: const Center(
+            child: Center(
               child: Text(
                 'TAWNY',
                 style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
+                  color: Colors.white.withOpacity(0.9),
+                  fontSize: 11,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1,
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           // Info
           Expanded(
             child: Column(
@@ -424,7 +495,7 @@ class _EpisodeItem extends StatelessWidget {
                   'Episode $episodeNumber',
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 14,
+                    fontSize: 15,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -441,18 +512,19 @@ class _EpisodeItem extends StatelessWidget {
           ),
           // Play button
           Container(
-            width: 36,
-            height: 36,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
                 color: Colors.white.withOpacity(0.3),
+                width: 1.5,
               ),
             ),
             child: const Icon(
               Icons.play_arrow,
               color: Colors.white,
-              size: 20,
+              size: 22,
             ),
           ),
         ],
@@ -460,4 +532,3 @@ class _EpisodeItem extends StatelessWidget {
     );
   }
 }
-
