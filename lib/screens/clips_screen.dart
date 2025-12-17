@@ -35,45 +35,24 @@ class _ClipsScreenState extends State<ClipsScreen> {
 class ClipItem extends StatelessWidget {
   const ClipItem({super.key});
 
-  static const Color brandRed = Color(0xFFE50914);
-
   @override
   Widget build(BuildContext context) {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Background video/image
-        Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Color(0xFF4A90A4),
-                Color(0xFF2d6a7a),
-                Color(0xFF1a4a5a),
-              ],
-            ),
-          ),
-          child: const Center(
-            child: Text(
-              'masaya',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 48,
-                fontWeight: FontWeight.w300,
-                fontStyle: FontStyle.italic,
-                letterSpacing: 4,
-              ),
-            ),
-          ),
+        // Background image
+        Image.asset(
+          'assets/top10/masaya.png',
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
         ),
         // Gradient overlay at bottom
         Positioned(
           bottom: 0,
           left: 0,
           right: 0,
-          height: 200,
+          height: 300,
           child: Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -81,7 +60,7 @@ class ClipItem extends StatelessWidget {
                 end: Alignment.bottomCenter,
                 colors: [
                   Colors.transparent,
-                  Colors.black.withOpacity(0.8),
+                  Colors.black.withOpacity(0.95),
                 ],
               ),
             ),
@@ -89,123 +68,135 @@ class ClipItem extends StatelessWidget {
         ),
         // Right side action buttons
         Positioned(
-          right: 12,
-          bottom: 200,
+          right: 16,
+          bottom: 120,
           child: Column(
             children: [
               _ActionButton(
-                icon: Icons.message,
+                imagePath: 'assets/icons_clips/whatsapp.png',
                 label: 'WhatsApp',
                 onTap: () {},
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
               _ActionButton(
-                icon: Icons.favorite_outline,
+                imagePath: 'assets/icons_clips/like.png',
                 label: 'Like',
                 onTap: () {},
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
               _ActionButton(
-                icon: Icons.bookmark_outline,
+                imagePath: 'assets/icons_clips/save.png',
                 label: 'Save',
                 onTap: () {},
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
               _ActionButton(
-                icon: Icons.share,
+                imagePath: 'assets/icons_clips/share.png',
                 label: 'Share',
                 onTap: () {},
               ),
             ],
           ),
         ),
-        // Bottom content
+        // Bottom content - SAFE AREA
         Positioned(
           left: 16,
-          right: 80,
-          bottom: 100,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Developer info
-              Row(
-                children: [
-                  // Avatar
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[700],
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.5),
-                        width: 1,
+          right: 16,
+          bottom: 20,
+          child: SafeArea(
+            top: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Row 1: Avatar + Name + Watch button
+                Row(
+                  children: [
+                    // Avatar
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
                       ),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'CLUB',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold,
+                      child: ClipOval(
+                        child: Image.asset(
+                          'assets/developers/Rectangle.png',
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Icon(
+                              Icons.business,
+                              color: Colors.grey,
+                              size: 18,
+                            );
+                          },
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Egyptian Developers',
+                    const SizedBox(width: 10),
+                    // Name
+                    const Text(
+                      'Egyptian Developers',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    // Watch button
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.play_circle_filled,
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                            SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                'Watch Orientation',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Description
+                const Padding(
+                  padding: EdgeInsets.only(right: 70),
+                  child: Text(
+                    'This is a Dummy Text to show only the case that we working on .',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      height: 1.4,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  // Watch Orientation button
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.play_circle_outline,
-                          color: Colors.white,
-                          size: 16,
-                        ),
-                        SizedBox(width: 4),
-                        Text(
-                          'Watch Orientation',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              // Description
-              Text(
-                'This is a Dummy Text to show only the case that we working on.',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.9),
-                  fontSize: 14,
-                  height: 1.4,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ],
@@ -214,12 +205,12 @@ class ClipItem extends StatelessWidget {
 }
 
 class _ActionButton extends StatelessWidget {
-  final IconData icon;
+  final String imagePath;
   final String label;
   final VoidCallback onTap;
 
   const _ActionButton({
-    required this.icon,
+    required this.imagePath,
     required this.label,
     required this.onTap,
   });
@@ -230,10 +221,10 @@ class _ActionButton extends StatelessWidget {
       onTap: onTap,
       child: Column(
         children: [
-          Icon(
-            icon,
-            color: Colors.white,
-            size: 28,
+          Image.asset(
+            imagePath,
+            width: 32,
+            height: 32,
           ),
           const SizedBox(height: 4),
           Text(
@@ -248,4 +239,3 @@ class _ActionButton extends StatelessWidget {
     );
   }
 }
-

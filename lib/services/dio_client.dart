@@ -9,8 +9,8 @@ class DioClient {
   // Change this to your backend URL
   // For Android emulator use: http://10.0.2.2:3000
   // For iOS simulator use: http://localhost:3000
-  // For physical device use your computer's IP: http://192.168.x.x:3000
-  static const String baseUrl = 'http://10.0.2.2:3000';
+  // For physical device use your computer's IP: http://172.20.10.3:3000
+  static const String baseUrl = 'http://172.20.10.3:3000';
 
   late Dio dio;
 

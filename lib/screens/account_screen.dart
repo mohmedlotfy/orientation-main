@@ -45,15 +45,8 @@ class AccountScreen extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.only(top: 50, bottom: 30),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            const Color(0xFF3a1a1a),
-            Colors.black.withOpacity(0.9),
-          ],
-        ),
+      decoration: const BoxDecoration(
+        color: Color(0xFF150000),
       ),
       child: Column(
         children: [
@@ -64,14 +57,14 @@ class AccountScreen extends StatelessWidget {
           Container(
             width: 80,
             height: 80,
-            decoration: BoxDecoration(
-              color: Colors.grey[800],
+            decoration: const BoxDecoration(
+              color: Color(0xFF1a1a1a),
               shape: BoxShape.circle,
             ),
-            child: Icon(
+            child: const Icon(
               Icons.person,
-              color: Colors.grey[500],
-              size: 40,
+              color: Colors.white,
+              size: 45,
             ),
           ),
           const SizedBox(height: 16),
@@ -201,13 +194,9 @@ class AccountScreen extends StatelessWidget {
             }),
           ];
 
-    return ListView.separated(
+    return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 16),
       itemCount: menuItems.length,
-      separatorBuilder: (context, index) => Divider(
-        color: Colors.white.withOpacity(0.1),
-        height: 1,
-      ),
       itemBuilder: (context, index) => menuItems[index],
     );
   }
