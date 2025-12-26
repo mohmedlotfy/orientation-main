@@ -121,26 +121,13 @@ class _InventoryItem extends StatelessWidget {
       child: Row(
         children: [
           // Thumbnail
-          Container(
-            width: 100,
-            height: 80,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF4A90A4), Color(0xFF2d6a7a)],
-              ),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Center(
-              child: Text(
-                'masaya',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.8),
-                  fontSize: 16,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.asset(
+              'assets/change_inventory/masaya_thumbnail.png',
+              width: 100,
+              height: 80,
+              fit: BoxFit.cover,
             ),
           ),
           const SizedBox(width: 16),

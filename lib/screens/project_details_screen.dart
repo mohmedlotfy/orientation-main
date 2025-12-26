@@ -248,7 +248,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   Widget _buildContentSection() {
     return Container(
       decoration: const BoxDecoration(
-        color: Color(0xFF1A1A1A),
+        color: Colors.black,
         borderRadius: BorderRadius.vertical(
           top: Radius.circular(24),
         ),
@@ -285,9 +285,9 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                   ),
                 ),
                 // Action buttons
-                _buildImageActionButton('assets/icons_clips/save.png'),
-                _buildImageActionButton('assets/icons_clips/whatsapp.png'),
-                _buildImageActionButton('assets/icons_clips/share.png'),
+                _buildImageActionButton('assets/icons_clips/save.png', iconSize: 56),
+                _buildImageActionButton('assets/icons_clips/whatsapp.png', iconSize: 56),
+                _buildImageActionButton('assets/icons_clips/share.png', iconSize: 56),
                 _buildActionButton(Icons.location_on_outlined),
               ],
             ),
@@ -376,38 +376,32 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
       margin: const EdgeInsets.only(left: 6),
       width: 48,
       height: 48,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(
-          color: Colors.white.withOpacity(0.3),
-          width: 1.5,
-        ),
+        color: Color(0xFF1A1A1A),
       ),
       child: Icon(
         icon,
         color: Colors.white,
-        size: 26,
+        size: 32,
       ),
     );
   }
 
-  Widget _buildImageActionButton(String imagePath) {
+  Widget _buildImageActionButton(String imagePath, {double iconSize = 40}) {
     return Container(
       margin: const EdgeInsets.only(left: 6),
       width: 48,
       height: 48,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(
-          color: Colors.white.withOpacity(0.3),
-          width: 1.5,
-        ),
+        color: Color(0xFF1A1A1A),
       ),
       child: Center(
         child: Image.asset(
           imagePath,
-          width: 32,
-          height: 32,
+          width: iconSize,
+          height: iconSize,
         ),
       ),
     );

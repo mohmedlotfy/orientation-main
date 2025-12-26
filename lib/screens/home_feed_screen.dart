@@ -31,7 +31,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
       'title': 'LVERSAN',
       'subtitle': 'NORTH COAST',
       'label': 'PRESENTS',
-      'image': 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200',
+      'image': 'assets/images/lversan.png',
+      'isAsset': true,
       'gradientColors': [const Color(0xFF1a4a4a), const Color(0xFF0d2525)],
     },
     {
@@ -297,44 +298,62 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
 
   Widget _buildFeaturedCard(Map<String, dynamic> project) {
     final gradientColors = project['gradientColors'] as List<Color>;
+    final bool isAsset = project['isAsset'] ?? false;
     return Stack(
       fit: StackFit.expand,
       children: [
         // Background image
-        Image.network(
-          project['image'],
-          fit: BoxFit.cover,
-          alignment: Alignment.center,
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-            return Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: gradientColors,
-                ),
+        isAsset
+            ? Image.asset(
+                project['image'],
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: gradientColors,
+                      ),
+                    ),
+                  );
+                },
+              )
+            : Image.network(
+                project['image'],
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: gradientColors,
+                      ),
+                    ),
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: gradientColors,
+                      ),
+                    ),
+                  );
+                },
               ),
-              child: const Center(
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2,
-                ),
-              ),
-            );
-          },
-          errorBuilder: (context, error, stackTrace) {
-            return Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: gradientColors,
-                ),
-              ),
-            );
-          },
-        ),
         // Color tint overlay (light at top)
         Container(
           decoration: BoxDecoration(
