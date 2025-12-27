@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
 import '../widgets/auth_header.dart';
 import '../widgets/custom_text_field.dart';
 import 'login_screen.dart';
@@ -16,6 +17,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  
+  String _fullPhoneNumber = '';
 
   static const Color brandRed = Color(0xFFE50914);
 
@@ -85,12 +88,49 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                       controller: _usernameController,
                     ),
                     const SizedBox(height: 16),
-                    // Phone number field
-                    CustomTextField(
-                      hintText: 'Phone number',
-                      prefixIcon: Icons.phone_outlined,
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
+                    // Phone number field with country code picker
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
+                          width: 1,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: IntlPhoneField(
+                        controller: _phoneController,
+                        initialCountryCode: 'EG',
+                        disableLengthCheck: true,
+                        dropdownIconPosition: IconPosition.trailing,
+                        dropdownIcon: Icon(
+                          Icons.arrow_drop_down,
+                          color: Colors.white.withOpacity(0.5),
+                        ),
+                        flagsButtonPadding: const EdgeInsets.only(left: 12),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
+                        dropdownTextStyle: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Phone number',
+                          hintStyle: TextStyle(
+                            color: Colors.white.withOpacity(0.5),
+                            fontSize: 16,
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 16,
+                          ),
+                        ),
+                        onChanged: (phone) {
+                          _fullPhoneNumber = phone.completeNumber;
+                        },
+                      ),
                     ),
                     const SizedBox(height: 16),
                     // Email field

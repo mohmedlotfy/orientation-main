@@ -71,14 +71,16 @@ class _CustomTextFieldState extends State<CustomTextField> {
                         ),
                       ),
                       if (_obscureText)
-                        Container(
-                          width: 24,
-                          height: 2,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.5),
-                            borderRadius: BorderRadius.circular(1),
+                        Transform.rotate(
+                          angle: -0.785398, // -45 degrees
+                          child: Container(
+                            width: 28,
+                            height: 2,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(1),
+                            ),
                           ),
-                          transform: Matrix4.rotationZ(-0.785398), // -45 degrees
                         ),
                     ],
                   ),
