@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'screens/splash_screen.dart';
+import 'services/notification_service.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -10,6 +11,18 @@ void main() {
       statusBarIconBrightness: Brightness.light,
     ),
   );
+  
+  // Initialize notification service to start periodic checks
+  final notificationService = NotificationService();
+  await notificationService.initialize();
+  
+  // Note: Background tasks using workmanager are temporarily disabled
+  // The periodic check will work when the app is open (every 5 minutes)
+  // To enable background tasks, uncomment the workmanager code below
+  // and ensure workmanager package is properly installed
+  
+  print('✅ Notification service initialized');
+  
   runApp(const OrientationApp());
 }
 

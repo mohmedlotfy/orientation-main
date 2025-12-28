@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import '../widgets/project_card.dart';
+import '../services/api/home_api.dart';
+import '../services/api/auth_api.dart';
+import '../models/project_model.dart';
+import '../models/developer_model.dart';
+import '../models/area_model.dart';
 import 'project_details_screen.dart';
 import 'latest_for_us_screen.dart';
 import 'top_10_screen.dart';
@@ -16,43 +21,139 @@ class HomeFeedScreen extends StatefulWidget {
   State<HomeFeedScreen> createState() => _HomeFeedScreenState();
 }
 
-class _HomeFeedScreenState extends State<HomeFeedScreen> {
+class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObserver {
   final PageController _featuredController = PageController();
+  final HomeApi _homeApi = HomeApi();
+  final AuthApi _authApi = AuthApi();
+  
   int _currentFeaturedPage = 0;
   String _selectedFilter = 'Medical';
+  bool _isLoading = true;
+  String _userName = 'User';
+  DateTime? _lastRefreshTime;
 
   final List<String> _filters = ['Medical', 'Commercial', 'Residential', 'Hotel'];
 
   static const Color brandRed = Color(0xFFE50914);
 
-  // Featured projects data
-  final List<Map<String, dynamic>> _featuredProjects = [
-    {
-      'title': 'LVERSAN',
-      'subtitle': 'NORTH COAST',
-      'label': 'PRESENTS',
-      'image': 'assets/images/lversan.png',
-      'isAsset': true,
-      'gradientColors': [const Color(0xFF1a4a4a), const Color(0xFF0d2525)],
-    },
-    {
-      'title': 'masaya',
-      'subtitle': 'SIDI ABDELRAHMAN',
-      'label': '',
-      'image': 'https://images.unsplash.com/photo-1520942702018-0862200e6873?w=1200',
-      'gradientColors': [const Color(0xFF4ECDC4), const Color(0xFF44A08D)],
-    },
-    {
-      'title': 'SEASHORE',
-      'subtitle': 'RAS ELHEKMA',
-      'label': '',
-      'image': 'https://images.unsplash.com/photo-1519046904884-53103b34b206?w=1200',
-      'gradientColors': [const Color(0xFF2d5a7b), const Color(0xFF1a3a52)],
-    },
-  ];
+  // Data from API
+  List<ProjectModel> _featuredProjects = [];
+  List<ProjectModel> _latestProjects = [];
+  List<ProjectModel> _continueWatching = [];
+  List<ProjectModel> _top10Projects = [];
+  List<ProjectModel> _northCoastProjects = [];
+  List<ProjectModel> _dubaiProjects = [];
+  List<ProjectModel> _omanProjects = [];
+  List<ProjectModel> _upcomingProjects = [];
+  List<DeveloperModel> _developers = [];
+  List<AreaModel> _areas = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadData();
+    _loadUserName();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh continue watching when screen becomes visible again (with debounce)
+    final now = DateTime.now();
+    if (_lastRefreshTime == null || 
+        now.difference(_lastRefreshTime!).inSeconds > 2) {
+      _lastRefreshTime = now;
+      _refreshContinueWatching();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Refresh continue watching when app comes back to foreground
+      _refreshContinueWatching();
+    }
+  }
+
+  Future<void> _refreshContinueWatching() async {
+    try {
+      print('🔄 Refreshing continue watching...');
+      final continueWatching = await _homeApi.getContinueWatching();
+      print('📊 Got ${continueWatching.length} continue watching projects');
+      if (mounted) {
+        setState(() {
+          _continueWatching = continueWatching;
+          _lastRefreshTime = DateTime.now();
+        });
+      }
+    } catch (e) {
+      print('❌ Error refreshing continue watching: $e');
+      // Silently fail - don't show error for background refresh
+    }
+  }
+
+  // Public method to refresh continue watching (can be called from MainScreen)
+  void refreshContinueWatching() {
+    _refreshContinueWatching();
+  }
+
+  // Test method to add sample progress (for debugging)
+  Future<void> _testContinueWatching() async {
+    // TODO: Implement test functionality
+  }
+
+  Future<void> _loadUserName() async {
+    final userInfo = await _authApi.getStoredUserInfo();
+    if (mounted) {
+      setState(() {
+        _userName = userInfo['username'] ?? 'User';
+      });
+    }
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final results = await Future.wait([
+        _homeApi.getFeaturedProjects(),
+        _homeApi.getLatestProjects(),
+        _homeApi.getContinueWatching(),
+        _homeApi.getTop10Projects(),
+        _homeApi.getProjectsByArea('North Coast'),
+        _homeApi.getProjectsByArea('Dubai'),
+        _homeApi.getProjectsByArea('Oman'),
+        _homeApi.getUpcomingProjects(),
+        _homeApi.getDevelopers(),
+        _homeApi.getAreas(),
+      ]);
+
+      if (mounted) {
+        setState(() {
+          _featuredProjects = results[0] as List<ProjectModel>;
+          _latestProjects = results[1] as List<ProjectModel>;
+          _continueWatching = results[2] as List<ProjectModel>;
+          _top10Projects = results[3] as List<ProjectModel>;
+          _northCoastProjects = results[4] as List<ProjectModel>;
+          _dubaiProjects = results[5] as List<ProjectModel>;
+          _omanProjects = results[6] as List<ProjectModel>;
+          _upcomingProjects = results[7] as List<ProjectModel>;
+          _developers = results[8] as List<DeveloperModel>;
+          _areas = results[9] as List<AreaModel>;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _featuredController.dispose();
     super.dispose();
   }
@@ -90,7 +191,24 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
             child: _buildSection(
               'Continue watching',
               onViewAll: () {},
-              child: _buildContinueWatchingList(),
+              child: Column(
+                children: [
+                  // Test button (for debugging - remove in production)
+                  if (_continueWatching.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: ElevatedButton(
+                        onPressed: _testContinueWatching,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: brandRed,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Test Continue Watching'),
+                      ),
+                    ),
+                  _buildContinueWatchingList(),
+                ],
+              ),
             ),
           ),
           SliverToBoxAdapter(
@@ -254,12 +372,18 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   }
 
   Widget _buildWatchButton() {
+    final currentProject = _featuredProjects.isNotEmpty 
+        ? _featuredProjects[_currentFeaturedPage] 
+        : null;
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => const ProjectDetailsScreen(),
+            builder: (context) => ProjectDetailsScreen(
+              projectId: currentProject?.id,
+              initialTabIndex: 1, // Open on Episodes tab
+            ),
           ),
         );
       },
@@ -296,16 +420,19 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     );
   }
 
-  Widget _buildFeaturedCard(Map<String, dynamic> project) {
-    final gradientColors = project['gradientColors'] as List<Color>;
-    final bool isAsset = project['isAsset'] ?? false;
+  Widget _buildFeaturedCard(ProjectModel project) {
+    final gradientColors = project.gradientColors.map((c) {
+      final hex = c.replaceAll('0x', '');
+      return Color(int.parse(hex, radix: 16));
+    }).toList();
+    final bool isAsset = project.isAsset;
     return Stack(
       fit: StackFit.expand,
       children: [
         // Background image
         isAsset
             ? Image.asset(
-                project['image'],
+                project.image,
                 fit: BoxFit.cover,
                 alignment: Alignment.center,
                 errorBuilder: (context, error, stackTrace) {
@@ -321,7 +448,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                 },
               )
             : Image.network(
-                project['image'],
+                project.image,
                 fit: BoxFit.cover,
                 alignment: Alignment.center,
                 loadingBuilder: (context, child, loadingProgress) {
@@ -438,9 +565,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                   fontSize: 12,
                 ),
               ),
-              const Text(
-                'AbdelRahman',
-                style: TextStyle(
+              Text(
+                _userName,
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -637,12 +764,26 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     required String imageAsset,
     required List<Color> gradientColors,
   }) {
+    // Find project by title from latest projects
+    ProjectModel? project;
+    if (_latestProjects.isNotEmpty) {
+      try {
+        project = _latestProjects.firstWhere(
+          (p) => p.title.toLowerCase() == title.toLowerCase(),
+        );
+      } catch (e) {
+        project = _latestProjects.first;
+      }
+    }
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => const ProjectDetailsScreen(),
+            builder: (context) => ProjectDetailsScreen(
+              projectId: project?.id,
+              initialTabIndex: 1, // Open on Episodes tab
+            ),
           ),
         );
       },
@@ -730,121 +871,164 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   }
 
   Widget _buildContinueWatchingList() {
+    if (_continueWatching.isEmpty) {
+      return SizedBox(
+        height: 110,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'No videos in progress',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.5),
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return SizedBox(
       height: 110,
-      child: ListView(
+      child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        children: [
-          _buildContinueWatchingItem(
-            title: 'TAWNY',
-            imageUrl: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600',
-            progress: 0.3,
-          ),
-          const SizedBox(width: 12),
-          _buildContinueWatchingItem(
-            title: 'SEASHORE',
-            imageUrl: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=600',
-            progress: 0.6,
-          ),
-          const SizedBox(width: 12),
-          _buildContinueWatchingItem(
-            title: 'masaya',
-            imageUrl: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=600',
-            progress: 0.45,
-          ),
-        ],
+        itemCount: _continueWatching.length,
+        itemBuilder: (context, index) {
+          final project = _continueWatching[index];
+          return Padding(
+            padding: EdgeInsets.only(right: index < _continueWatching.length - 1 ? 12 : 0),
+            child: _buildContinueWatchingItem(
+              project: project,
+            ),
+          );
+        },
       ),
     );
   }
 
   Widget _buildContinueWatchingItem({
-    required String title,
-    required String imageUrl,
-    required double progress,
+    required ProjectModel project,
   }) {
-    return Container(
-      width: 160,
-      height: 100,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 6,
-            offset: const Offset(0, 3),
+    final gradientColors = project.gradientColors.map((c) {
+      final hex = c.replaceAll('0x', '');
+      return Color(int.parse(hex, radix: 16));
+    }).toList();
+    final progress = project.watchProgress ?? 0.0;
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProjectDetailsScreen(
+              projectId: project.id,
+            ),
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Background image
-            Image.network(
-              imageUrl,
-              fit: BoxFit.cover,
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return Container(
-                  color: const Color(0xFFD4A574),
-                  child: const Center(
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  ),
-                );
-              },
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFFD4A574), Color(0xFFC49A6C)],
-                    ),
-                  ),
-                );
-              },
-            ),
-            // Gradient overlay
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.7),
-                  ],
-                ),
-              ),
-            ),
-            // Title
-            Center(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 2,
-                ),
-              ),
-            ),
-            // Progress bar
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: LinearProgressIndicator(
-                value: progress,
-                backgroundColor: Colors.white.withOpacity(0.3),
-                valueColor: const AlwaysStoppedAnimation<Color>(brandRed),
-                minHeight: 4,
-              ),
+        );
+      },
+      child: Container(
+        width: 160,
+        height: 100,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
             ),
           ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Background image
+              project.isAsset
+                  ? Image.asset(
+                      project.image,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: gradientColors,
+                            ),
+                          ),
+                        );
+                      },
+                    )
+                  : Image.network(
+                      project.image,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: gradientColors,
+                            ),
+                          ),
+                          child: const Center(
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: gradientColors,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+              // Gradient overlay
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withOpacity(0.7),
+                    ],
+                  ),
+                ),
+              ),
+              // Title
+              Center(
+                child: Text(
+                  project.title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 2,
+                  ),
+                ),
+              ),
+              // Progress bar
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: LinearProgressIndicator(
+                  value: progress,
+                  backgroundColor: Colors.white.withOpacity(0.3),
+                  valueColor: const AlwaysStoppedAnimation<Color>(brandRed),
+                  minHeight: 4,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -963,12 +1147,31 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     required String subtitle,
     required String imageUrl,
   }) {
+    // Try to find project by title
+    final allProjects = [
+      ..._northCoastProjects,
+      ..._dubaiProjects,
+      ..._omanProjects,
+    ];
+    ProjectModel? project;
+    if (allProjects.isNotEmpty) {
+      try {
+        project = allProjects.firstWhere(
+          (p) => p.title.toLowerCase() == title.toLowerCase(),
+        );
+      } catch (e) {
+        project = allProjects.first;
+      }
+    }
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => const ProjectDetailsScreen(),
+            builder: (context) => ProjectDetailsScreen(
+              projectId: project?.id,
+              initialTabIndex: 1, // Open on Episodes tab
+            ),
           ),
         );
       },
@@ -1108,12 +1311,26 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     required List<Color> gradientColors,
     bool hasLogo = false,
   }) {
+    // Try to find project by title
+    ProjectModel? project;
+    if (_upcomingProjects.isNotEmpty) {
+      try {
+        project = _upcomingProjects.firstWhere(
+          (p) => p.title.toLowerCase() == title.toLowerCase(),
+        );
+      } catch (e) {
+        project = _upcomingProjects.first;
+      }
+    }
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => const ProjectDetailsScreen(),
+            builder: (context) => ProjectDetailsScreen(
+              projectId: project?.id,
+              initialTabIndex: 1, // Open on Episodes tab
+            ),
           ),
         );
       },

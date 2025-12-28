@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../widgets/orientation_logo.dart';
 import '../widgets/loading_indicator.dart';
+import '../services/api/auth_api.dart';
 import 'onboarding_screen.dart';
+import 'main_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -14,6 +16,7 @@ class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _progressAnimation;
+  final AuthApi _authApi = AuthApi();
 
   @override
   void initState() {
@@ -33,16 +36,34 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    // Navigate to onboarding after loading completes
+    // Navigate based on auth status after loading completes
     _controller.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => const OnboardingScreen(),
-          ),
-        );
+        _checkAuthAndNavigate();
       }
     });
+  }
+
+  Future<void> _checkAuthAndNavigate() async {
+    final isLoggedIn = await _authApi.isLoggedIn();
+    
+    if (!mounted) return;
+    
+    if (isLoggedIn) {
+      // User is logged in, go to main screen
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => const MainScreen(),
+        ),
+      );
+    } else {
+      // User is not logged in, go to onboarding
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => const OnboardingScreen(),
+        ),
+      );
+    }
   }
 
   @override

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import '../widgets/auth_header.dart';
 import '../widgets/custom_text_field.dart';
+import '../services/api/auth_api.dart';
 import 'otp_screen.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -13,9 +14,13 @@ class ForgotPasswordScreen extends StatefulWidget {
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _emailController = TextEditingController();
+  final AuthApi _authApi = AuthApi();
+  
   int _resendSeconds = 3;
   Timer? _timer;
   bool _canResend = false;
+  bool _isLoading = false;
+  String? _errorMessage;
 
   static const Color brandRed = Color(0xFFE50914);
 
@@ -54,6 +59,69 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     final minutes = (_resendSeconds ~/ 60).toString().padLeft(2, '0');
     final seconds = (_resendSeconds % 60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
+  }
+
+  Future<void> _handleSendCode() async {
+    if (_emailController.text.isEmpty) {
+      setState(() {
+        _errorMessage = 'Please enter your email';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await _authApi.forgotPassword(_emailController.text.trim());
+
+      if (!mounted) return;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => OtpScreen(
+            email: _emailController.text.trim(),
+          ),
+        ),
+      );
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleResendCode() async {
+    if (!_canResend) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await _authApi.forgotPassword(_emailController.text.trim());
+      _startTimer();
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -102,50 +170,69 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
                     ),
-                    const SizedBox(height: 200),
+                    // Error message
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: brandRed.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: brandRed.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline, color: brandRed, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _errorMessage!,
+                                style: const TextStyle(color: brandRed, fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 150),
                     // Send code button
                     SizedBox(
                       width: double.infinity,
                       height: 52,
                       child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => OtpScreen(
-                                email: _emailController.text.isNotEmpty
-                                    ? _emailController.text
-                                    : 'Abdelrahmanzahran39@gmail.com',
-                              ),
-                            ),
-                          );
-                        },
+                        onPressed: _isLoading ? null : _handleSendCode,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF2A2A2A),
                           foregroundColor: Colors.white,
+                          disabledBackgroundColor: const Color(0xFF2A2A2A).withOpacity(0.5),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(30),
                           ),
                           elevation: 0,
                         ),
-                        child: const Text(
-                          'Send code',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              )
+                            : const Text(
+                                'Send code',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                       ),
                     ),
                     const SizedBox(height: 20),
                     // Resend code timer
                     Center(
                       child: GestureDetector(
-                        onTap: _canResend
-                            ? () {
-                                _startTimer();
-                              }
-                            : null,
+                        onTap: _canResend ? _handleResendCode : null,
                         child: RichText(
                           text: TextSpan(
                             text: 'Resend code ',

@@ -403,18 +403,22 @@ class FeaturedProjectCard extends StatelessWidget {
 }
 
 class ProjectListItem extends StatelessWidget {
+  final String projectId;
   final String developerName;
   final String projectName;
   final List<Color> gradientColors;
+  final bool isSaved;
   final VoidCallback? onWatch;
   final VoidCallback? onBookmark;
   final VoidCallback? onShare;
 
   const ProjectListItem({
     super.key,
+    required this.projectId,
     required this.developerName,
     required this.projectName,
     required this.gradientColors,
+    this.isSaved = false,
     this.onWatch,
     this.onBookmark,
     this.onShare,
@@ -513,8 +517,8 @@ class ProjectListItem extends StatelessWidget {
             children: [
               IconButton(
                 icon: Icon(
-                  Icons.bookmark_outline,
-                  color: Colors.white.withOpacity(0.6),
+                  isSaved ? Icons.bookmark : Icons.bookmark_outline,
+                  color: isSaved ? const Color(0xFFE50914) : Colors.white.withOpacity(0.6),
                   size: 22,
                 ),
                 onPressed: onBookmark,

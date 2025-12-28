@@ -4,10 +4,104 @@ import 'project_details_screen.dart';
 import 'latest_for_us_screen.dart';
 import 'projects_list_screen.dart';
 
-class SearchScreen extends StatelessWidget {
+class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
 
+  @override
+  State<SearchScreen> createState() => _SearchScreenState();
+}
+
+class _SearchScreenState extends State<SearchScreen> {
   static const Color brandRed = Color(0xFFE50914);
+
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  String _selectedFilter = 'All';
+  final List<String> _filters = ['All', 'Projects', 'Developers', 'Areas'];
+
+  // Mock data for search
+  final List<Map<String, dynamic>> _allProjects = [
+    {
+      'id': '1',
+      'title': 'Seashore',
+      'subtitle': 'FULLY FINISHED UNITS',
+      'location': 'North Coast',
+      'developer': 'Mountain View',
+      'image': 'assets/top10/masaya.png',
+      'colors': [Color(0xFF5a8a9a), Color(0xFF3a6a7a)],
+    },
+    {
+      'id': '2',
+      'title': 'THE ICON',
+      'subtitle': 'Gardens',
+      'location': 'New Cairo',
+      'developer': 'SODIC',
+      'image': 'assets/top10/the_icon.png',
+      'colors': [Color(0xFF3d3d3d), Color(0xFF2a2a2a)],
+    },
+    {
+      'id': '3',
+      'title': 'Tawny',
+      'subtitle': 'Hyde Park',
+      'location': 'New Cairo',
+      'developer': 'Hyde Park',
+      'image': 'assets/top10/masaya.png',
+      'colors': [Color(0xFFd4c4b0), Color(0xFFc4b4a0)],
+    },
+    {
+      'id': '4',
+      'title': 'Palm Hills',
+      'subtitle': 'Luxury Living',
+      'location': 'Dubai',
+      'developer': 'Emaar',
+      'image': 'assets/top10/the_icon.png',
+      'colors': [Color(0xFF2d5a4a), Color(0xFF1d4a3a)],
+    },
+  ];
+
+  final List<Map<String, dynamic>> _allDevelopers = [
+    {'id': '1', 'name': 'Mountain View', 'projects': 15, 'image': 'assets/developers/mv.png'},
+    {'id': '2', 'name': 'SODIC', 'projects': 22, 'image': 'assets/developers/sodic.png'},
+    {'id': '3', 'name': 'Emaar', 'projects': 30, 'image': 'assets/developers/emaar.png'},
+    {'id': '4', 'name': 'Hyde Park', 'projects': 12, 'image': 'assets/developers/hp.png'},
+    {'id': '5', 'name': 'Palm Hills', 'projects': 18, 'image': 'assets/developers/ph.png'},
+  ];
+
+  final List<Map<String, dynamic>> _allAreas = [
+    {'id': '1', 'name': 'North Coast', 'projects': 45, 'image': 'assets/areas/nc.png'},
+    {'id': '2', 'name': 'New Cairo', 'projects': 80, 'image': 'assets/areas/cairo.png'},
+    {'id': '3', 'name': 'Dubai', 'projects': 120, 'image': 'assets/areas/dubai.png'},
+    {'id': '4', 'name': 'Oman', 'projects': 25, 'image': 'assets/areas/oman.png'},
+  ];
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<Map<String, dynamic>> get _filteredProjects {
+    if (_searchQuery.isEmpty) return _allProjects;
+    return _allProjects.where((p) =>
+      p['title'].toString().toLowerCase().contains(_searchQuery.toLowerCase()) ||
+      p['location'].toString().toLowerCase().contains(_searchQuery.toLowerCase()) ||
+      p['developer'].toString().toLowerCase().contains(_searchQuery.toLowerCase())
+    ).toList();
+  }
+
+  List<Map<String, dynamic>> get _filteredDevelopers {
+    if (_searchQuery.isEmpty) return _allDevelopers;
+    return _allDevelopers.where((d) =>
+      d['name'].toString().toLowerCase().contains(_searchQuery.toLowerCase())
+    ).toList();
+  }
+
+  List<Map<String, dynamic>> get _filteredAreas {
+    if (_searchQuery.isEmpty) return _allAreas;
+    return _allAreas.where((a) =>
+      a['name'].toString().toLowerCase().contains(_searchQuery.toLowerCase())
+    ).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,9 +114,13 @@ class SearchScreen extends StatelessWidget {
             _buildAppBar(context),
             // Search bar
             _buildSearchBar(),
+            // Filter tabs
+            _buildFilterTabs(),
             // Results
             Expanded(
-              child: _buildResults(context),
+              child: _searchQuery.isEmpty
+                  ? _buildInitialContent(context)
+                  : _buildSearchResults(),
             ),
           ],
         ),
@@ -84,6 +182,7 @@ class SearchScreen extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: TextField(
+                controller: _searchController,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 14,
@@ -96,6 +195,241 @@ class SearchScreen extends StatelessWidget {
                   ),
                   border: InputBorder.none,
                 ),
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value;
+                  });
+                },
+              ),
+            ),
+            if (_searchQuery.isNotEmpty)
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _searchController.clear();
+                    _searchQuery = '';
+                  });
+                },
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 16),
+                  child: Icon(
+                    Icons.close,
+                    color: Colors.white.withOpacity(0.5),
+                    size: 20,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterTabs() {
+    return Container(
+      height: 36,
+      margin: const EdgeInsets.only(top: 12),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _filters.length,
+        itemBuilder: (context, index) {
+          final filter = _filters[index];
+          final isSelected = _selectedFilter == filter;
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedFilter = filter;
+              });
+            },
+            child: Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: isSelected ? brandRed : const Color(0xFF1A1A1A),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isSelected ? brandRed : Colors.white.withOpacity(0.1),
+                ),
+              ),
+              child: Text(
+                filter,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : Colors.white.withOpacity(0.7),
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildInitialContent(BuildContext context) {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 20),
+          
+          // Show based on filter
+          if (_selectedFilter == 'All' || _selectedFilter == 'Projects') ...[
+            // The latest for us section
+            _buildSection(
+              context,
+              'The latest for us',
+              onViewAll: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const LatestForUsScreen(),
+                  ),
+                );
+              },
+              child: _buildLatestList(context),
+            ),
+            // Continue watching section
+            _buildSection(
+              context,
+              'Continue watching',
+              onViewAll: () {},
+              child: _buildContinueWatchingList(),
+            ),
+            // Projects in Dubai section
+            _buildSection(
+              context,
+              'Projects in Dubai',
+              onViewAll: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ProjectsListScreen(
+                      title: 'Projects in Dubai',
+                    ),
+                  ),
+                );
+              },
+              child: _buildDubaiList(context),
+            ),
+          ],
+          
+          if (_selectedFilter == 'Developers') ...[
+            _buildSection(
+              context,
+              'Top Developers',
+              onViewAll: () {},
+              child: _buildDevelopersList(),
+            ),
+          ],
+          
+          if (_selectedFilter == 'Areas') ...[
+            _buildSection(
+              context,
+              'Popular Areas',
+              onViewAll: () {},
+              child: _buildAreasList(),
+            ),
+          ],
+          
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchResults() {
+    // Check if there are results based on selected filter
+    bool hasResults = false;
+    
+    if (_selectedFilter == 'All') {
+      hasResults = _filteredProjects.isNotEmpty || 
+                   _filteredDevelopers.isNotEmpty || 
+                   _filteredAreas.isNotEmpty;
+    } else if (_selectedFilter == 'Projects') {
+      hasResults = _filteredProjects.isNotEmpty;
+    } else if (_selectedFilter == 'Developers') {
+      hasResults = _filteredDevelopers.isNotEmpty;
+    } else if (_selectedFilter == 'Areas') {
+      hasResults = _filteredAreas.isNotEmpty;
+    }
+
+    if (!hasResults) {
+      return _buildNoResults();
+    }
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 16),
+          
+          // Projects results
+          if ((_selectedFilter == 'All' || _selectedFilter == 'Projects') && 
+              _filteredProjects.isNotEmpty) ...[
+            _buildSection(
+              context,
+              'Projects (${_filteredProjects.length})',
+              onViewAll: () {},
+              child: _buildProjectResults(),
+            ),
+          ],
+          
+          // Developers results
+          if ((_selectedFilter == 'All' || _selectedFilter == 'Developers') && 
+              _filteredDevelopers.isNotEmpty) ...[
+            _buildSection(
+              context,
+              'Developers (${_filteredDevelopers.length})',
+              onViewAll: () {},
+              child: _buildDeveloperResults(),
+            ),
+          ],
+          
+          // Areas results
+          if ((_selectedFilter == 'All' || _selectedFilter == 'Areas') && 
+              _filteredAreas.isNotEmpty) ...[
+            _buildSection(
+              context,
+              'Areas (${_filteredAreas.length})',
+              onViewAll: () {},
+              child: _buildAreaResults(),
+            ),
+          ],
+          
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoResults() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.only(top: 80),
+        child: Column(
+          children: [
+            Icon(
+              Icons.search_off,
+              size: 50,
+              color: Colors.white.withOpacity(0.3),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'No results found',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.6),
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '"$_searchQuery"',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.4),
+                fontSize: 14,
               ),
             ),
           ],
@@ -104,51 +438,105 @@ class SearchScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildResults(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 20),
-          // The latest for us section
-          _buildSection(
-            context,
-            'The latest for us',
-            onViewAll: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const LatestForUsScreen(),
-                ),
-              );
-            },
-            child: _buildLatestList(context),
-          ),
-          // Continue watching section
-          _buildSection(
-            context,
-            'Continue watching',
-            onViewAll: () {},
-            child: _buildContinueWatchingList(),
-          ),
-          // Projects in Dubai section
-          _buildSection(
-            context,
-            'Projects in Dubai',
-            onViewAll: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ProjectsListScreen(
-                    title: 'Projects in Dubai',
+  Widget _buildProjectResults() {
+    return SizedBox(
+      height: 220,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _filteredProjects.length,
+        itemBuilder: (context, index) {
+          final project = _filteredProjects[index];
+          return Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: _SearchProjectCard(
+              title: project['title'],
+              subtitle: project['subtitle'],
+              imageAsset: project['image'],
+              gradientColors: project['colors'],
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ProjectDetailsScreen(),
                   ),
-                ),
-              );
-            },
-            child: _buildDubaiList(context),
-          ),
-          const SizedBox(height: 20),
-        ],
+                );
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildDeveloperResults() {
+    return SizedBox(
+      height: 115,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _filteredDevelopers.length,
+        itemBuilder: (context, index) {
+          final developer = _filteredDevelopers[index];
+          return _DeveloperCard(
+            name: developer['name'],
+            projectCount: developer['projects'],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAreaResults() {
+    return SizedBox(
+      height: 115,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _filteredAreas.length,
+        itemBuilder: (context, index) {
+          final area = _filteredAreas[index];
+          return _AreaCard(
+            name: area['name'],
+            projectCount: area['projects'],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildDevelopersList() {
+    return SizedBox(
+      height: 115,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _allDevelopers.length,
+        itemBuilder: (context, index) {
+          final developer = _allDevelopers[index];
+          return _DeveloperCard(
+            name: developer['name'],
+            projectCount: developer['projects'],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAreasList() {
+    return SizedBox(
+      height: 115,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _allAreas.length,
+        itemBuilder: (context, index) {
+          final area = _allAreas[index];
+          return _AreaCard(
+            name: area['name'],
+            projectCount: area['projects'],
+          );
+        },
       ),
     );
   }
@@ -287,6 +675,7 @@ class SearchScreen extends StatelessWidget {
       ),
     );
   }
+
 }
 
 class _SearchProjectCard extends StatelessWidget {
@@ -498,13 +887,16 @@ class _ContinueWatchingCard extends StatelessWidget {
                   ),
                 // Title overlay
                 Center(
-                  child: Text(
-                    'TAWNY',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.9),
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 4,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'TAWNY',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 4,
+                      ),
                     ),
                   ),
                 ),
@@ -550,3 +942,128 @@ class _ContinueWatchingCard extends StatelessWidget {
   }
 }
 
+class _DeveloperCard extends StatelessWidget {
+  final String name;
+  final int projectCount;
+
+  const _DeveloperCard({
+    required this.name,
+    required this.projectCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 120,
+      margin: const EdgeInsets.only(right: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.1),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              Icons.business,
+              color: Colors.white.withOpacity(0.7),
+              size: 20,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            name,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          Text(
+            '$projectCount projects',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.5),
+              fontSize: 10,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AreaCard extends StatelessWidget {
+  final String name;
+  final int projectCount;
+
+  const _AreaCard({
+    required this.name,
+    required this.projectCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 120,
+      margin: const EdgeInsets.only(right: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.1),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE50914).withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.location_on,
+              color: Color(0xFFE50914),
+              size: 20,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            name,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          Text(
+            '$projectCount projects',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.5),
+              fontSize: 10,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

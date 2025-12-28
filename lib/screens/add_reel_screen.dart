@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:file_picker/file_picker.dart';
+import '../services/api/project_api.dart';
+import '../services/api/auth_api.dart';
+import '../models/project_model.dart';
+import 'dart:io';
 
 class AddReelScreen extends StatefulWidget {
   const AddReelScreen({super.key});
@@ -11,17 +16,169 @@ class AddReelScreen extends StatefulWidget {
 class _AddReelScreenState extends State<AddReelScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _projectApi = ProjectApi();
+  final _authApi = AuthApi();
+  
   bool _whatsAppEnabled = false;
   bool _watchOrientationEnabled = false;
   String? _selectedOrientation;
+  String? _selectedProjectId;
+  File? _selectedVideo;
+  bool _isLoading = false;
+  bool _isLoadingProjects = false;
+  List<ProjectModel> _developerProjects = [];
 
   static const Color brandRed = Color(0xFFE50914);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDeveloperProjects();
+  }
 
   @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadDeveloperProjects() async {
+    setState(() {
+      _isLoadingProjects = true;
+    });
+
+    try {
+      final userInfo = await _authApi.getStoredUserInfo();
+      final userId = userInfo['userId'] ?? '';
+      
+      // In dev mode, we'll use a mock developer ID
+      // In real API, you'd get the developer ID from the user's profile
+      final developerId = 'dev-1'; // Mock - replace with actual developer ID from user
+      
+      final projects = await _projectApi.getDeveloperProjects(developerId);
+      
+      if (mounted) {
+        setState(() {
+          _developerProjects = projects;
+          _isLoadingProjects = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingProjects = false;
+        });
+        _showSnackBar('Error loading projects: $e');
+      }
+    }
+  }
+
+  Future<void> _pickVideo() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.video,
+        allowMultiple: false,
+      );
+
+      if (result != null && result.files.single.path != null) {
+        setState(() {
+          _selectedVideo = File(result.files.single.path!);
+        });
+      }
+    } catch (e) {
+      _showSnackBar('Error picking video: $e');
+    }
+  }
+
+  Future<void> _shareReel() async {
+    // Validation
+    if (_selectedVideo == null) {
+      _showSnackBar('Please select a video', isError: true);
+      return;
+    }
+
+    if (_titleController.text.trim().isEmpty) {
+      _showSnackBar('Please enter a title', isError: true);
+      return;
+    }
+
+    if (_watchOrientationEnabled && _selectedOrientation == null) {
+      _showSnackBar('Please select an orientation', isError: true);
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final userInfo = await _authApi.getStoredUserInfo();
+      final developerId = 'dev-1'; // Mock - replace with actual developer ID
+      final developerName = 'Mountain View'; // Mock - replace with actual developer name
+      final developerLogo = 'assets/developers/mountain_view.png'; // Mock
+
+      // Find project ID from selected orientation name
+      String? projectId;
+      if (_watchOrientationEnabled && _selectedOrientation != null) {
+        final project = _developerProjects.firstWhere(
+          (p) => p.title == _selectedOrientation,
+          orElse: () => _developerProjects.isNotEmpty 
+              ? _developerProjects.first 
+              : ProjectModel(id: '', title: '', image: ''),
+        );
+        projectId = project.id;
+      }
+
+      final success = await _projectApi.addReel(
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        videoPath: _selectedVideo!.path,
+        projectId: projectId,
+        hasWhatsApp: _whatsAppEnabled,
+        developerId: developerId,
+        developerName: developerName,
+        developerLogo: developerLogo,
+      );
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        if (success) {
+          _showSnackBar('Reel added successfully!', isSuccess: true);
+          Future.delayed(const Duration(seconds: 1), () {
+            if (mounted) {
+              Navigator.pop(context);
+            }
+          });
+        } else {
+          _showSnackBar('Failed to add reel', isError: true);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        _showSnackBar('Error: $e', isError: true);
+      }
+    }
+  }
+
+  void _showSnackBar(String message, {bool isError = false, bool isSuccess = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError
+            ? Colors.red
+            : isSuccess
+                ? Colors.green
+                : Colors.grey[800],
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   @override
@@ -73,9 +230,7 @@ class _AddReelScreenState extends State<AddReelScreen> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
+                  onPressed: _isLoading ? null : _shareReel,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF2A2A2A),
                     foregroundColor: Colors.white,
@@ -84,13 +239,22 @@ class _AddReelScreenState extends State<AddReelScreen> {
                     ),
                     elevation: 0,
                   ),
-                  child: const Text(
-                    'Share Reel',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text(
+                          'Share Reel',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
               ),
             ),
@@ -133,9 +297,7 @@ class _AddReelScreenState extends State<AddReelScreen> {
 
   Widget _buildUploadArea() {
     return GestureDetector(
-      onTap: () {
-        // Handle media upload
-      },
+      onTap: _pickVideo,
       child: CustomPaint(
         painter: _DashedBorderPainter(),
         child: Container(
@@ -146,25 +308,83 @@ class _AddReelScreenState extends State<AddReelScreen> {
             color: const Color(0xFF0A0A0A),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.add_photo_alternate_outlined,
-                color: Colors.white.withOpacity(0.7),
-                size: 48,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Add Reel',
-                style: GoogleFonts.cairo(
-                  color: Colors.white.withOpacity(0.9),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
+          child: _selectedVideo != null
+              ? Stack(
+                  children: [
+                    // Video preview placeholder
+                    Container(
+                      width: double.infinity,
+                      height: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[900],
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.videocam,
+                              color: Colors.white.withOpacity(0.7),
+                              size: 48,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              _selectedVideo!.path.split('/').last,
+                              style: GoogleFonts.cairo(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Change video button
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: GestureDetector(
+                        onTap: _pickVideo,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.6),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.edit,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.add_photo_alternate_outlined,
+                      color: Colors.white.withOpacity(0.7),
+                      size: 48,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Add Reel',
+                      style: GoogleFonts.cairo(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -307,15 +527,25 @@ class _AddReelScreenState extends State<AddReelScreen> {
             color: Colors.white,
             fontSize: 14,
           ),
-          items: ['Masaya', 'Seashore', 'The Icon', 'TAWNY'].map((String value) {
-            return DropdownMenuItem<String>(
-              value: value,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(value),
-              ),
-            );
-          }).toList(),
+          items: _isLoadingProjects
+              ? [
+                  const DropdownMenuItem<String>(
+                    value: null,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Text('Loading...'),
+                    ),
+                  ),
+                ]
+              : _developerProjects.map((ProjectModel project) {
+                  return DropdownMenuItem<String>(
+                    value: project.title,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(project.title),
+                    ),
+                  );
+                }).toList(),
           onChanged: (String? newValue) {
             setState(() {
               _selectedOrientation = newValue;

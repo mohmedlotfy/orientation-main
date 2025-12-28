@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
@@ -6,24 +7,27 @@ import '../models/clip_model.dart';
 import '../services/api/project_api.dart';
 import 'project_details_screen.dart';
 
-class ClipsScreen extends StatefulWidget {
-  const ClipsScreen({super.key});
+class ReelsPlayerScreen extends StatefulWidget {
+  final List<ClipModel> clips;
+  final int initialIndex;
+
+  const ReelsPlayerScreen({
+    super.key,
+    required this.clips,
+    this.initialIndex = 0,
+  });
 
   @override
-  State<ClipsScreen> createState() => ClipsScreenState();
+  State<ReelsPlayerScreen> createState() => _ReelsPlayerScreenState();
 }
 
-class ClipsScreenState extends State<ClipsScreen> with WidgetsBindingObserver {
-  final PageController _pageController = PageController();
+class _ReelsPlayerScreenState extends State<ReelsPlayerScreen> with WidgetsBindingObserver {
+  late PageController _pageController;
   final ProjectApi _projectApi = ProjectApi();
-  
-  List<ClipModel> _clips = [];
   final Map<int, VideoPlayerController> _controllers = {};
   final Map<int, bool> _likedClips = {};
   final Map<int, bool> _savedClips = {};
   int _currentIndex = 0;
-  bool _isLoading = true;
-  bool _isVisible = false; // Track if screen is visible
 
   static const Color brandRed = Color(0xFFE50914);
 
@@ -31,18 +35,22 @@ class ClipsScreenState extends State<ClipsScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _loadClips();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+    _initializeCurrentVideo();
+    _loadLikedStatus();
+    _loadSavedStatus();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || 
         state == AppLifecycleState.inactive) {
-      pauseAllVideos();
+      _pauseAllVideos();
     }
   }
 
-  void pauseAllVideos() {
+  void _pauseAllVideos() {
     for (var controller in _controllers.values) {
       if (controller.value.isPlaying) {
         controller.pause();
@@ -50,46 +58,9 @@ class ClipsScreenState extends State<ClipsScreen> with WidgetsBindingObserver {
     }
   }
 
-  // Call this when tab becomes visible
-  void setVisible(bool visible) {
-    _isVisible = visible;
-    if (visible) {
-      // Resume current video if visible
-      if (_controllers.containsKey(_currentIndex)) {
-        _controllers[_currentIndex]?.play();
-      }
-    } else {
-      // Pause all videos when not visible
-      pauseAllVideos();
-    }
-  }
-
-  Future<void> _loadClips() async {
-    try {
-      final clips = await _projectApi.getAllClips();
-      if (mounted) {
-        setState(() {
-          _clips = clips;
-          _isLoading = false;
-        });
-        if (clips.isNotEmpty) {
-          _initializeVideoAt(0);
-          _loadLikedStatus();
-          _loadSavedStatus();
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
   Future<void> _loadLikedStatus() async {
-    for (int i = 0; i < _clips.length; i++) {
-      final isLiked = await _projectApi.isClipLiked(_clips[i].id);
+    for (int i = 0; i < widget.clips.length; i++) {
+      final isLiked = await _projectApi.isClipLiked(widget.clips[i].id);
       if (mounted) {
         setState(() {
           _likedClips[i] = isLiked;
@@ -99,8 +70,8 @@ class ClipsScreenState extends State<ClipsScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _loadSavedStatus() async {
-    for (int i = 0; i < _clips.length; i++) {
-      final isSaved = await _projectApi.isProjectSaved(_clips[i].projectId);
+    for (int i = 0; i < widget.clips.length; i++) {
+      final isSaved = await _projectApi.isProjectSaved(widget.clips[i].projectId);
       if (mounted) {
         setState(() {
           _savedClips[i] = isSaved;
@@ -109,18 +80,25 @@ class ClipsScreenState extends State<ClipsScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _initializeCurrentVideo() async {
+    await _initializeVideoAt(_currentIndex);
+    // Pre-load next video
+    if (_currentIndex + 1 < widget.clips.length) {
+      _initializeVideoAt(_currentIndex + 1);
+    }
+  }
+
   Future<void> _initializeVideoAt(int index) async {
     if (_controllers.containsKey(index)) return;
-    if (index < 0 || index >= _clips.length) return;
+    if (index < 0 || index >= widget.clips.length) return;
 
-    final clip = _clips[index];
-    
-    // Flutter's official sample videos
+    final clip = widget.clips[index];
+    // Use sample video for demo
+    // Flutter's official sample videos that work everywhere
     final sampleVideos = [
       'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
       'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
     ];
-    
     final videoUrl = clip.videoUrl.isNotEmpty && !clip.videoUrl.contains('example.com')
         ? clip.videoUrl
         : sampleVideos[index % sampleVideos.length];
@@ -130,8 +108,7 @@ class ClipsScreenState extends State<ClipsScreen> with WidgetsBindingObserver {
       await controller.initialize();
       controller.setLooping(true);
 
-      // Only play if this is current index AND screen is visible
-      if (index == _currentIndex && _isVisible) {
+      if (index == _currentIndex) {
         controller.play();
       }
 
@@ -146,27 +123,26 @@ class ClipsScreenState extends State<ClipsScreen> with WidgetsBindingObserver {
   }
 
   void _onPageChanged(int index) {
+    // Pause previous video
     _controllers[_currentIndex]?.pause();
 
     setState(() {
       _currentIndex = index;
     });
 
-    // Only play if screen is visible
-    if (_isVisible) {
-      if (_controllers.containsKey(index)) {
-        _controllers[index]!.play();
-      } else {
-        _initializeVideoAt(index);
-      }
+    // Play current video
+    if (_controllers.containsKey(index)) {
+      _controllers[index]!.play();
+    } else {
+      _initializeVideoAt(index);
     }
 
-    // Pre-load next
-    if (index + 1 < _clips.length) {
+    // Pre-load next video
+    if (index + 1 < widget.clips.length) {
       _initializeVideoAt(index + 1);
     }
 
-    // Dispose old controllers
+    // Dispose old videos to save memory
     _disposeOldControllers(index);
   }
 
@@ -186,7 +162,7 @@ class ClipsScreenState extends State<ClipsScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    pauseAllVideos();
+    _pauseAllVideos();
     _pageController.dispose();
     for (var controller in _controllers.values) {
       controller.dispose();
@@ -195,7 +171,7 @@ class ClipsScreenState extends State<ClipsScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _toggleLike(int index) async {
-    final clip = _clips[index];
+    final clip = widget.clips[index];
     final isCurrentlyLiked = _likedClips[index] ?? false;
 
     setState(() {
@@ -209,6 +185,7 @@ class ClipsScreenState extends State<ClipsScreen> with WidgetsBindingObserver {
         await _projectApi.unlikeClip(clip.id);
       }
     } catch (e) {
+      // Revert on error
       setState(() {
         _likedClips[index] = isCurrentlyLiked;
       });
@@ -216,7 +193,7 @@ class ClipsScreenState extends State<ClipsScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _toggleSave(int index) async {
-    final clip = _clips[index];
+    final clip = widget.clips[index];
     final isCurrentlySaved = _savedClips[index] ?? false;
 
     setState(() {
@@ -240,7 +217,7 @@ class ClipsScreenState extends State<ClipsScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _openWhatsApp(ClipModel clip) async {
-    const phone = '201205403733';
+    const phone = '201205403733'; // Default number
     final message = 'مهتم بمشروع ${clip.developerName}';
     final url = 'https://wa.me/$phone?text=${Uri.encodeComponent(message)}';
 
@@ -269,9 +246,7 @@ ${clip.description}
   }
 
   void _openProjectDetails(ClipModel clip) {
-    // Pause current video before navigating
-    pauseAllVideos();
-    
+    _pauseAllVideos();
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -281,9 +256,7 @@ ${clip.description}
   }
 
   void _openEpisodes(ClipModel clip) {
-    // Pause current video before navigating
-    pauseAllVideos();
-    
+    _pauseAllVideos();
     // Navigate to Project Details on Episodes tab
     Navigator.push(
       context,
@@ -320,57 +293,50 @@ ${clip.description}
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(
-          child: CircularProgressIndicator(color: Color(0xFFE50914)),
-        ),
-      );
-    }
-
-    if (_clips.isEmpty) {
-      return Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.video_library_outlined,
-                color: Colors.white.withOpacity(0.3),
-                size: 80,
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'No Clips Available',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
-                  fontSize: 20,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     return Scaffold(
       backgroundColor: Colors.black,
-      body: PageView.builder(
-        controller: _pageController,
-        scrollDirection: Axis.vertical,
-        itemCount: _clips.length,
-        onPageChanged: _onPageChanged,
-        itemBuilder: (context, index) {
-          return _buildClipItem(index);
-        },
+      body: Stack(
+        children: [
+          // Video PageView
+          PageView.builder(
+            controller: _pageController,
+            scrollDirection: Axis.vertical,
+            itemCount: widget.clips.length,
+            onPageChanged: _onPageChanged,
+            itemBuilder: (context, index) {
+              return _buildReelItem(index);
+            },
+          ),
+          // Back button
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 10,
+            left: 16,
+            child: GestureDetector(
+              onTap: () {
+                _pauseAllVideos();
+                Navigator.pop(context);
+              },
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.black45,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Icon(
+                  Icons.arrow_back,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildClipItem(int index) {
-    final clip = _clips[index];
+  Widget _buildReelItem(int index) {
+    final clip = widget.clips[index];
     final controller = _controllers[index];
     final isLiked = _likedClips[index] ?? false;
     final isSaved = _savedClips[index] ?? false;
@@ -406,15 +372,11 @@ ${clip.description}
                           ? Image.asset(
                               clip.thumbnail,
                               fit: BoxFit.cover,
-                              width: double.infinity,
-                              height: double.infinity,
                               errorBuilder: (_, __, ___) => _buildLoadingPlaceholder(),
                             )
                           : Image.network(
                               clip.thumbnail,
                               fit: BoxFit.cover,
-                              width: double.infinity,
-                              height: double.infinity,
                               errorBuilder: (_, __, ___) => _buildLoadingPlaceholder(),
                             ))
                       : _buildLoadingPlaceholder(),
@@ -422,14 +384,21 @@ ${clip.description}
         ),
         // Play/Pause indicator
         if (controller != null && !controller.value.isPlaying)
-          const Center(
-            child: Icon(
-              Icons.play_arrow,
-              color: Colors.white54,
-              size: 80,
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                color: Colors.black45,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.play_arrow,
+                color: Colors.white,
+                size: 50,
+              ),
             ),
           ),
-        // Gradient overlay
+        // Gradient overlay at bottom
         Positioned(
           bottom: 0,
           left: 0,
@@ -448,38 +417,44 @@ ${clip.description}
             ),
           ),
         ),
-        // Action buttons - positioned higher
+        // Action buttons (right side) - positioned higher
         Positioned(
           right: 16,
           bottom: 200,
           child: Column(
             children: [
               _ActionButton(
-                imagePath: 'assets/icons_clips/whatsapp.png',
+                icon: Icons.chat,
                 label: 'WhatsApp',
                 onTap: () => _openWhatsApp(clip),
+                useImage: true,
+                imagePath: 'assets/icons_clips/whatsapp.png',
               ),
               const SizedBox(height: 18),
               _ActionButton(
-                imagePath: isLiked ? '' : 'assets/icons_clips/like.png',
-                icon: isLiked ? Icons.favorite : null,
-                iconColor: isLiked ? brandRed : Colors.white,
+                icon: isLiked ? Icons.favorite : Icons.favorite_border,
                 label: '${clip.likes + (isLiked ? 1 : 0)}',
                 onTap: () => _toggleLike(index),
+                iconColor: isLiked ? brandRed : Colors.white,
+                useImage: !isLiked,
+                imagePath: 'assets/icons_clips/like.png',
               ),
               const SizedBox(height: 18),
               _ActionButton(
-                imagePath: isSaved ? '' : 'assets/icons_clips/save.png',
-                icon: isSaved ? Icons.bookmark : null,
-                iconColor: isSaved ? brandRed : Colors.white,
+                icon: isSaved ? Icons.bookmark : Icons.bookmark_border,
                 label: isSaved ? 'Saved' : 'Save',
                 onTap: () => _toggleSave(index),
+                iconColor: isSaved ? brandRed : Colors.white,
+                useImage: !isSaved,
+                imagePath: 'assets/icons_clips/save.png',
               ),
               const SizedBox(height: 18),
               _ActionButton(
-                imagePath: 'assets/icons_clips/share.png',
+                icon: Icons.share,
                 label: 'Share',
                 onTap: () => _shareClip(clip),
+                useImage: true,
+                imagePath: 'assets/icons_clips/share.png',
               ),
             ],
           ),
@@ -495,10 +470,10 @@ ${clip.description}
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Developer info row - tappable to go to project details
+                // Developer info row
                 Row(
                   children: [
-                    // Developer avatar - tappable
+                    // Avatar - tappable
                     GestureDetector(
                       onTap: () => _openProjectDetails(clip),
                       child: Container(
@@ -528,7 +503,7 @@ ${clip.description}
                       ),
                     ),
                     const SizedBox(width: 10),
-                    // Developer name - tappable, flexible width
+                    // Name - tappable, flexible width
                     Flexible(
                       child: GestureDetector(
                         onTap: () => _openProjectDetails(clip),
@@ -544,7 +519,7 @@ ${clip.description}
                       ),
                     ),
                     const SizedBox(width: 10),
-                    // Watch Orientation button
+                    // Watch button - opens Episodes tab
                     GestureDetector(
                       onTap: () => _openEpisodes(clip),
                       child: Container(
@@ -580,7 +555,7 @@ ${clip.description}
                   ],
                 ),
                 const SizedBox(height: 14),
-                // Title - tappable to go to project details
+                // Title - tappable
                 GestureDetector(
                   onTap: () => _openProjectDetails(clip),
                   child: Text(
@@ -593,18 +568,16 @@ ${clip.description}
                   ),
                 ),
                 const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: Text(
-                    clip.description,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.9),
-                      fontSize: 14,
-                      height: 1.4,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                // Description
+                Text(
+                  clip.description,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.9),
+                    fontSize: 14,
+                    height: 1.4,
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -624,18 +597,20 @@ ${clip.description}
 }
 
 class _ActionButton extends StatelessWidget {
-  final String imagePath;
+  final IconData icon;
   final String label;
   final VoidCallback onTap;
-  final IconData? icon;
   final Color iconColor;
+  final bool useImage;
+  final String imagePath;
 
   const _ActionButton({
-    required this.imagePath,
+    required this.icon,
     required this.label,
     required this.onTap,
-    this.icon,
     this.iconColor = Colors.white,
+    this.useImage = false,
+    this.imagePath = '',
   });
 
   @override
@@ -644,17 +619,21 @@ class _ActionButton extends StatelessWidget {
       onTap: onTap,
       child: Column(
         children: [
-          icon != null
-              ? Icon(icon, color: iconColor, size: 32)
-              : Image.asset(
+          useImage && imagePath.isNotEmpty
+              ? Image.asset(
                   imagePath,
                   width: 32,
                   height: 32,
                   errorBuilder: (_, __, ___) => Icon(
-                    Icons.circle,
+                    icon,
                     color: iconColor,
                     size: 32,
                   ),
+                )
+              : Icon(
+                  icon,
+                  color: iconColor,
+                  size: 32,
                 ),
           const SizedBox(height: 4),
           Text(

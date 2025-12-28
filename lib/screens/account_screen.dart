@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/orientation_logo.dart';
+import '../services/api/auth_api.dart';
 import 'account_info_screen.dart';
 import 'join_us_screen.dart';
 import 'login_screen.dart';
@@ -8,18 +9,67 @@ import 'change_inventory_screen.dart';
 import 'about_us_screen.dart';
 import 'privacy_policy_screen.dart';
 import 'terms_conditions_screen.dart';
+import 'admin_dashboard_screen.dart';
 
-enum UserRole { sales, developer }
+enum UserRole { user, developer, admin }
 
-class AccountScreen extends StatelessWidget {
-  final UserRole userRole;
+class AccountScreen extends StatefulWidget {
+  const AccountScreen({super.key});
 
-  const AccountScreen({
-    super.key,
-    this.userRole = UserRole.developer,
-  });
+  @override
+  State<AccountScreen> createState() => _AccountScreenState();
+}
 
+class _AccountScreenState extends State<AccountScreen> {
   static const Color brandRed = Color(0xFFE50914);
+  final AuthApi _authApi = AuthApi();
+  
+  String _userName = 'User';
+  String _userEmail = '';
+  String _userRole = 'user';
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    final userInfo = await _authApi.getStoredUserInfo();
+    if (mounted) {
+      setState(() {
+        _userName = userInfo['username'] ?? 'User';
+        _userEmail = userInfo['email'] ?? '';
+        _userRole = userInfo['role'] ?? 'user';
+        _isLoading = false;
+      });
+    }
+  }
+
+  UserRole _getUserRole() {
+    switch (_userRole.toLowerCase()) {
+      case 'admin':
+        return UserRole.admin;
+      case 'developer':
+        return UserRole.developer;
+      default:
+        return UserRole.user;
+    }
+  }
+
+  Future<void> _handleLogout() async {
+    await _authApi.logout();
+    if (!mounted) return;
+    
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const LoginScreen(),
+      ),
+      (route) => false,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,18 +119,31 @@ class AccountScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           // Name
-          const Text(
-            'Abdelrahman Zahran',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          _isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : Text(
+                  _userName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
           const SizedBox(height: 4),
           // Role
           Text(
-            userRole == UserRole.developer ? 'Developer' : 'Sales',
+            _getUserRole() == UserRole.admin
+                ? 'Admin'
+                : _getUserRole() == UserRole.developer
+                    ? 'Developer'
+                    : 'User',
             style: TextStyle(
               color: Colors.white.withOpacity(0.5),
               fontSize: 14,
@@ -92,107 +155,104 @@ class AccountScreen extends StatelessWidget {
   }
 
   Widget _buildMenuList(BuildContext context) {
-    final menuItems = userRole == UserRole.developer
-        ? [
-            _MenuItem(title: 'Account', subtitle: 'Information', onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const AccountInfoScreen(),
-                ),
-              );
-            }),
-            _MenuItem(title: 'Join', subtitle: 'Us', onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const JoinUsScreen(),
-                ),
-              );
-            }),
-            _MenuItem(title: 'Add', subtitle: 'Reel', onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const AddReelScreen(),
-                ),
-              );
-            }),
-            _MenuItem(title: 'Change', subtitle: 'Inventory', onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ChangeInventoryScreen(),
-                ),
-              );
-            }),
-            _MenuItem(title: 'About', subtitle: 'Us', onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const AboutUsScreen(),
-                ),
-              );
-            }),
-            _MenuItem(title: 'Privacy', subtitle: 'Policy', onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const PrivacyPolicyScreen(),
-                ),
-              );
-            }),
-            _MenuItem(title: 'Terms and', subtitle: 'Conditions', onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const TermsConditionsScreen(),
-                ),
-              );
-            }),
-          ]
-        : [
-            _MenuItem(title: 'Account', subtitle: 'Information', onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const AccountInfoScreen(),
-                ),
-              );
-            }),
-            _MenuItem(title: 'Join', subtitle: 'Us', onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const JoinUsScreen(),
-                ),
-              );
-            }),
-            _MenuItem(title: 'About', subtitle: 'Us', onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const AboutUsScreen(),
-                ),
-              );
-            }),
-            _MenuItem(title: 'Privacy', subtitle: 'Policy', onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const PrivacyPolicyScreen(),
-                ),
-              );
-            }),
-            _MenuItem(title: 'Terms and', subtitle: 'Conditions', onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const TermsConditionsScreen(),
-                ),
-              );
-            }),
-          ];
+    final userRole = _getUserRole();
+    final menuItems = <_MenuItem>[];
+    
+    // All users can see these
+    menuItems.add(
+      _MenuItem(title: 'Account', subtitle: 'Information', onTap: () async {
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const AccountInfoScreen(),
+          ),
+        );
+        // Reload user data if profile was updated
+        if (result == true) {
+          _loadUserData();
+        }
+      }),
+    );
+
+    // Admin only: Dashboard
+    if (userRole == UserRole.admin) {
+      menuItems.add(
+        _MenuItem(title: 'Admin', subtitle: 'Dashboard', onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const AdminDashboardScreen(),
+            ),
+          );
+        }),
+      );
+    }
+
+    // Users can apply to become developers
+    if (userRole == UserRole.user) {
+      menuItems.add(
+        _MenuItem(title: 'Join', subtitle: 'Us', onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const JoinUsScreen(),
+            ),
+          );
+        }),
+      );
+    }
+
+    // Developers can add reels and change inventory
+    if (userRole == UserRole.developer || userRole == UserRole.admin) {
+      menuItems.add(
+        _MenuItem(title: 'Add', subtitle: 'Reel', onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const AddReelScreen(),
+            ),
+          );
+        }),
+      );
+      menuItems.add(
+        _MenuItem(title: 'Change', subtitle: 'Inventory', onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ChangeInventoryScreen(),
+            ),
+          );
+        }),
+      );
+    }
+
+    // All users can see these
+    menuItems.addAll([
+      _MenuItem(title: 'About', subtitle: 'Us', onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const AboutUsScreen(),
+          ),
+        );
+      }),
+      _MenuItem(title: 'Privacy', subtitle: 'Policy', onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const PrivacyPolicyScreen(),
+          ),
+        );
+      }),
+      _MenuItem(title: 'Terms and', subtitle: 'Conditions', onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const TermsConditionsScreen(),
+          ),
+        );
+      }),
+    ]);
 
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -208,15 +268,7 @@ class AccountScreen extends StatelessWidget {
         width: double.infinity,
         height: 48,
         child: ElevatedButton(
-          onPressed: () {
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const LoginScreen(),
-              ),
-              (route) => false,
-            );
-          },
+          onPressed: _handleLogout,
           style: ElevatedButton.styleFrom(
             backgroundColor: brandRed,
             foregroundColor: Colors.white,

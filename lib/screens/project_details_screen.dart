@@ -1,9 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 import 'clips_screen.dart';
 import 'projects_list_screen.dart';
+import 'episode_player_screen.dart';
+import 'reels_player_screen.dart';
+import '../models/project_model.dart';
+import '../models/episode_model.dart';
+import '../models/clip_model.dart';
+import '../models/pdf_file_model.dart';
+import '../services/api/project_api.dart';
+import '../data/mock_data.dart';
 
 class ProjectDetailsScreen extends StatefulWidget {
-  const ProjectDetailsScreen({super.key});
+  final String? projectId;
+  final int initialTabIndex;
+  
+  const ProjectDetailsScreen({
+    super.key, 
+    this.projectId,
+    this.initialTabIndex = 0, // 0: Project, 1: Episodes, 2: Inventory, 3: Reels, 4: PDF
+  });
 
   @override
   State<ProjectDetailsScreen> createState() => _ProjectDetailsScreenState();
@@ -12,20 +30,439 @@ class ProjectDetailsScreen extends StatefulWidget {
 class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final ProjectApi _projectApi = ProjectApi();
 
   static const Color brandRed = Color(0xFFE50914);
   static const Color brandGreen = Color(0xFF00C853);
 
+  ProjectModel? _project;
+  List<EpisodeModel> _episodes = [];
+  List<ClipModel> _clips = [];
+  List<PdfFileModel> _pdfFiles = [];
+  List<ProjectModel> _relatedProjects = [];
+  bool _isLoading = true;
+  bool _isSaved = false;
+  bool _isScriptExpanded = false;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(
+      length: 5, // Project, Episodes, Inventory, Reels, MB
+      vsync: this,
+      initialIndex: widget.initialTabIndex,
+    );
+    _loadProjectData();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadProjectData() async {
+    if (widget.projectId == null) {
+      // Use default mock project for demo
+      final defaultProject = MockData.featuredProjects.isNotEmpty 
+          ? MockData.featuredProjects.first 
+          : null;
+      // Get related projects for default project
+      List<ProjectModel> relatedProjects = [];
+      if (defaultProject != null) {
+        // First, try to get projects from same area
+        if (defaultProject.area.isNotEmpty) {
+          final areaProjects = MockData.getProjectsByArea(defaultProject.area);
+          for (final areaProject in areaProjects) {
+            if (areaProject.id != defaultProject.id && 
+                !relatedProjects.any((p) => p.id == areaProject.id)) {
+              relatedProjects.add(areaProject);
+              if (relatedProjects.length >= 3) break;
+            }
+          }
+        }
+        // If not enough, add projects from same developer
+        if (relatedProjects.length < 3 && defaultProject.developerId.isNotEmpty) {
+          final devProjects = MockData.getProjectsByDeveloperId(defaultProject.developerId);
+          for (final devProject in devProjects) {
+            if (devProject.id != defaultProject.id && 
+                !relatedProjects.any((p) => p.id == devProject.id)) {
+              relatedProjects.add(devProject);
+              if (relatedProjects.length >= 3) break;
+            }
+          }
+        }
+        // If still not enough, add any other projects
+        if (relatedProjects.length < 3) {
+          final allProjects = [
+            ...MockData.featuredProjects,
+            ...MockData.latestProjects,
+            ...MockData.top10Projects,
+          ];
+          for (final otherProject in allProjects) {
+            if (otherProject.id != defaultProject.id && 
+                !relatedProjects.any((p) => p.id == otherProject.id)) {
+              relatedProjects.add(otherProject);
+              if (relatedProjects.length >= 3) break;
+            }
+          }
+        }
+        relatedProjects = relatedProjects.take(3).toList();
+      }
+      
+      setState(() {
+        _project = defaultProject;
+        // Get episodes for the default project (not just first 3)
+        _episodes = defaultProject != null
+            ? MockData.getEpisodesByProjectId(defaultProject.id)
+            : MockData.episodes.take(3).toList();
+        _clips = defaultProject != null 
+            ? MockData.getClipsByProjectId(defaultProject.id)
+            : [];
+        _pdfFiles = defaultProject != null
+            ? MockData.getPdfFilesByProjectId(defaultProject.id)
+            : [];
+        _relatedProjects = relatedProjects;
+        _isLoading = false;
+      });
+      _checkIfSaved();
+      return;
+    }
+
+    try {
+      final project = await _projectApi.getProjectById(widget.projectId!);
+      final episodes = await _projectApi.getEpisodes(widget.projectId!);
+      final clips = await _projectApi.getClipsByProject(widget.projectId!);
+      final pdfFiles = await _projectApi.getPdfFiles(widget.projectId!);
+      final isSaved = await _projectApi.isProjectSaved(widget.projectId!);
+      
+      // Get related projects (from same developer or same area)
+      List<ProjectModel> relatedProjects = [];
+      if (project != null) {
+        // First, try to get projects from same area (more likely to have multiple projects)
+        if (project.area.isNotEmpty) {
+          final areaProjects = MockData.getProjectsByArea(project.area);
+          for (final areaProject in areaProjects) {
+            if (areaProject.id != project.id && 
+                !relatedProjects.any((p) => p.id == areaProject.id)) {
+              relatedProjects.add(areaProject);
+              if (relatedProjects.length >= 3) break;
+            }
+          }
+        }
+        // If not enough, add projects from same developer
+        if (relatedProjects.length < 3 && project.developerId.isNotEmpty) {
+          final devProjects = await _projectApi.getDeveloperProjects(project.developerId);
+          for (final devProject in devProjects) {
+            if (devProject.id != project.id && 
+                !relatedProjects.any((p) => p.id == devProject.id)) {
+              relatedProjects.add(devProject);
+              if (relatedProjects.length >= 3) break;
+            }
+          }
+        }
+        // If still not enough, add any other projects
+        if (relatedProjects.length < 3) {
+          final allProjects = [
+            ...MockData.featuredProjects,
+            ...MockData.latestProjects,
+            ...MockData.top10Projects,
+          ];
+          for (final otherProject in allProjects) {
+            if (otherProject.id != project.id && 
+                !relatedProjects.any((p) => p.id == otherProject.id)) {
+              relatedProjects.add(otherProject);
+              if (relatedProjects.length >= 3) break;
+            }
+          }
+        }
+        // Limit to 3 projects
+        relatedProjects = relatedProjects.take(3).toList();
+      }
+
+      if (mounted) {
+        setState(() {
+          _project = project;
+          _episodes = episodes;
+          _clips = clips;
+          _pdfFiles = pdfFiles;
+          _relatedProjects = relatedProjects;
+          _isSaved = isSaved;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _checkIfSaved() async {
+    if (_project == null) return;
+    final isSaved = await _projectApi.isProjectSaved(_project!.id);
+    if (mounted) {
+      setState(() {
+        _isSaved = isSaved;
+      });
+    }
+  }
+
+  Future<void> _toggleSave() async {
+    if (_project == null) return;
+    
+    final wasSaved = _isSaved;
+    setState(() {
+      _isSaved = !_isSaved;
+    });
+
+    try {
+      if (_isSaved) {
+        await _projectApi.saveProject(_project!.id);
+        _showSnackBar('Saved! ❤️', isError: false);
+      } else {
+        await _projectApi.unsaveProject(_project!.id);
+        _showSnackBar('Removed from saved', isError: false);
+      }
+    } catch (e) {
+      // Revert on error
+      setState(() {
+        _isSaved = wasSaved;
+      });
+      _showSnackBar('Error saving project', isError: true);
+    }
+  }
+
+  Future<void> _openWhatsApp() async {
+    if (_project == null || _project!.whatsappNumber.isEmpty) {
+      _showSnackBar('WhatsApp number not available', isError: true);
+      return;
+    }
+
+    // Clean phone number - remove spaces, dashes, and + sign
+    String phone = _project!.whatsappNumber
+        .replaceAll('+', '')
+        .replaceAll(' ', '')
+        .replaceAll('-', '');
+    
+    final message = 'مهتم بمشروع ${_project!.title}';
+    final url = 'https://wa.me/$phone?text=${Uri.encodeComponent(message)}';
+
+    try {
+      final uri = Uri.parse(url);
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      _showSnackBar('Could not open WhatsApp', isError: true);
+    }
+  }
+
+  Future<void> _openLocation() async {
+    if (_project == null || _project!.locationUrl.isEmpty) {
+      _showSnackBar('Location not available', isError: true);
+      return;
+    }
+
+    try {
+      final uri = Uri.parse(_project!.locationUrl);
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      _showSnackBar('Could not open location', isError: true);
+    }
+  }
+
+  Future<void> _copyScript() async {
+    if (_project == null || _project!.script.isEmpty) {
+      _showSnackBar('Script not available', isError: true);
+      return;
+    }
+
+    await Clipboard.setData(ClipboardData(text: _project!.script));
+    _showSnackBar('Copied! ✓', isError: false);
+  }
+
+  Future<void> _shareProject() async {
+    if (_project == null) {
+      _showSnackBar('Nothing to share', isError: true);
+      return;
+    }
+
+    final shareText = '''
+🏠 ${_project!.title}
+📍 ${_project!.location.isNotEmpty ? _project!.location : _project!.area}
+🏗️ ${_project!.developerName}
+
+${_project!.script.isNotEmpty ? _project!.script : _project!.description}
+
+📞 WhatsApp: ${_project!.whatsappNumber}
+📍 Location: ${_project!.locationUrl}
+''';
+
+    try {
+      await Share.share(shareText, subject: _project!.title);
+    } catch (e) {
+      _showSnackBar('Error sharing', isError: true);
+    }
+  }
+
+  Future<void> _openInventory() async {
+    if (_project == null || _project!.inventoryUrl.isEmpty) {
+      _showSnackBar('Inventory not available', isError: true);
+      return;
+    }
+
+    try {
+      final uri = Uri.parse(_project!.inventoryUrl);
+      final launched = await launchUrl(
+        uri, 
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) {
+        _showSnackBar('Could not open inventory', isError: true);
+      }
+    } catch (e) {
+      debugPrint('Error opening inventory: $e');
+      _showSnackBar('Error opening inventory', isError: true);
+    }
+  }
+
+  void _showSnackBar(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isError ? Icons.error_outline : Icons.check_circle_outline,
+              color: Colors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+        duration: const Duration(seconds: 2),
+        backgroundColor: isError ? Colors.red.shade800 : Colors.green.shade700,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    );
+  }
+
+  void _showScriptBottomSheet(String script) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.75,
+        ),
+        decoration: const BoxDecoration(
+          color: Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle bar
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            // Header
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Script',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          _copyScript();
+                          Navigator.pop(context);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: brandRed,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.copy, color: Colors.white, size: 16),
+                              SizedBox(width: 6),
+                              Text(
+                                'Copy',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: const Icon(
+                          Icons.close,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            // Script content
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                child: Text(
+                  script,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.8),
+                    fontSize: 14,
+                    height: 1.6,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -46,31 +483,30 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   }
 
   Widget _buildHeroSection() {
+    final projectTitle = _project?.title ?? 'Project';
+    final projectArea = _project?.area ?? _project?.location ?? '';
+    final projectImage = _project?.image ?? '';
+    final isAsset = _project?.isAsset ?? false;
+
     return SizedBox(
       height: 280,
       child: Stack(
         children: [
           // Background image
           Positioned.fill(
-            child: Image.asset(
-              'assets/top10/masaya.png',
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Color(0xFF5a8a9a),
-                        Color(0xFF3a6a7a),
-                        Color(0xFF2a5a6a),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
+            child: projectImage.isNotEmpty
+                ? (isAsset
+                    ? Image.asset(
+                        projectImage,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => _buildGradientBackground(),
+                      )
+                    : Image.network(
+                        projectImage,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => _buildGradientBackground(),
+                      ))
+                : _buildGradientBackground(),
           ),
           // Dark overlay gradient
           Positioned.fill(
@@ -153,14 +589,16 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(
-                      'Seashore',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
-                        fontSize: 28,
-                        fontWeight: FontWeight.w300,
-                        fontStyle: FontStyle.italic,
-                        letterSpacing: 1,
+                    Flexible(
+                      child: Text(
+                        projectTitle,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.9),
+                          fontSize: 28,
+                          fontWeight: FontWeight.w300,
+                          fontStyle: FontStyle.italic,
+                          letterSpacing: 1,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 4),
@@ -182,7 +620,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'RAS EL HEKMA',
+                  projectArea.toUpperCase(),
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.6),
                     fontSize: 9,
@@ -192,7 +630,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'FULLY FINISHED UNITS',
+                  _project?.developerName.toUpperCase() ?? 'FULLY FINISHED UNITS',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.9),
                     fontSize: 14,
@@ -209,33 +647,40 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
             left: 0,
             right: 0,
             child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2A2A2A).withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(25),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.play_arrow,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                    SizedBox(width: 8),
-                    Text(
-                      'Continue Watching',
-                      style: TextStyle(
+              child: GestureDetector(
+                onTap: () {
+                  if (_episodes.isNotEmpty) {
+                    _showSnackBar('Playing: ${_episodes.first.title}');
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2A2A2A).withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(25),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.play_arrow,
                         color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                        size: 18,
                       ),
-                    ),
-                  ],
+                      SizedBox(width: 8),
+                      Text(
+                        'Continue Watching',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -245,7 +690,27 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     );
   }
 
+  Widget _buildGradientBackground() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF5a8a9a),
+            Color(0xFF3a6a7a),
+            Color(0xFF2a5a6a),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildContentSection() {
+    final projectTitle = _project?.title ?? 'Project';
+    final projectLocation = _project?.location ?? _project?.area ?? '';
+    final projectScript = _project?.script ?? '';
+
     return Container(
       decoration: const BoxDecoration(
         color: Colors.black,
@@ -265,9 +730,9 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'SeaShore',
-                        style: TextStyle(
+                      Text(
+                        projectTitle,
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 22,
                           fontWeight: FontWeight.w700,
@@ -275,7 +740,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Ras ElHekma',
+                        projectLocation,
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.5),
                           fontSize: 13,
@@ -285,10 +750,22 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                   ),
                 ),
                 // Action buttons
-                _buildImageActionButton('assets/icons_clips/save.png', iconSize: 56),
-                _buildImageActionButton('assets/icons_clips/whatsapp.png', iconSize: 56),
-                _buildImageActionButton('assets/icons_clips/share.png', iconSize: 56),
-                _buildActionButton(Icons.location_on_outlined),
+                GestureDetector(
+                  onTap: _toggleSave,
+                  child: _buildSaveButton(),
+                ),
+                GestureDetector(
+                  onTap: _openWhatsApp,
+                  child: _buildImageActionButton('assets/icons_clips/whatsapp.png', iconSize: 56),
+                ),
+                GestureDetector(
+                  onTap: _shareProject,
+                  child: _buildImageActionButton('assets/icons_clips/share.png', iconSize: 56),
+                ),
+                GestureDetector(
+                  onTap: _openLocation,
+                  child: _buildActionButton(Icons.location_on_outlined),
+                ),
               ],
             ),
           ),
@@ -312,20 +789,48 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: Text(
-                        'This is a Dummy Text to show only the case that we working on .',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.7),
-                          fontSize: 13,
-                          height: 1.5,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            projectScript.isEmpty 
+                                ? 'No script available'
+                                : (projectScript.length > 100 
+                                    ? '${projectScript.substring(0, 100)}...' 
+                                    : projectScript),
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.7),
+                              fontSize: 13,
+                              height: 1.5,
+                            ),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (projectScript.length > 100) ...[
+                            const SizedBox(height: 4),
+                            GestureDetector(
+                              onTap: () => _showScriptBottomSheet(projectScript),
+                              child: const Text(
+                                'See more',
+                                style: TextStyle(
+                                  color: brandRed,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Icon(
-                      Icons.copy_outlined,
-                      color: Colors.white.withOpacity(0.5),
-                      size: 20,
+                    GestureDetector(
+                      onTap: _copyScript,
+                      child: Icon(
+                        Icons.copy_outlined,
+                        color: Colors.white.withOpacity(0.5),
+                        size: 20,
+                      ),
                     ),
                   ],
                 ),
@@ -352,6 +857,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
               Tab(text: 'Episodes'),
               Tab(text: 'Inventory'),
               Tab(text: 'Reels'),
+              Tab(text: 'PDF'),
             ],
           ),
           // Tab content
@@ -363,6 +869,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                 _buildEpisodesTab(),
                 _buildInventoryTab(),
                 _buildReelsTab(),
+                _buildMbTab(),
               ],
             ),
           ),
@@ -384,6 +891,31 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
         icon,
         color: Colors.white,
         size: 32,
+      ),
+    );
+  }
+
+  Widget _buildSaveButton() {
+    return Container(
+      margin: const EdgeInsets.only(left: 6),
+      width: 48,
+      height: 48,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        color: Color(0xFF1A1A1A),
+      ),
+      child: Center(
+        child: _isSaved
+            ? const Icon(
+                Icons.favorite,
+                color: brandRed,
+                size: 28,
+              )
+            : Image.asset(
+                'assets/icons_clips/save.png',
+                width: 56,
+                height: 56,
+              ),
       ),
     );
   }
@@ -412,7 +944,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: ElevatedButton(
-          onPressed: () {},
+          onPressed: _openInventory,
           style: ElevatedButton.styleFrom(
             backgroundColor: brandGreen,
             foregroundColor: Colors.white,
@@ -442,32 +974,100 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   }
 
   Widget _buildEpisodesTab() {
+    if (_episodes.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.video_library_outlined,
+              color: Colors.white.withOpacity(0.3),
+              size: 60,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No episodes available',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.5),
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: 3,
+      itemCount: _episodes.length,
       itemBuilder: (context, index) {
+        final episode = _episodes[index];
         return _EpisodeItem(
-          episodeNumber: index + 1,
-          duration: '33 min',
+          episodeNumber: episode.episodeNumber,
+          duration: episode.duration,
+          title: episode.title,
+          thumbnail: episode.thumbnail,
+          isAsset: episode.isAsset,
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => EpisodePlayerScreen(
+                  episode: episode,
+                  projectTitle: _project?.title ?? '',
+                ),
+              ),
+            );
+            // Progress should be saved automatically when EpisodePlayerScreen disposes
+            print('✅ Returned from Episode Player - progress should be saved');
+          },
         );
       },
     );
   }
 
   Widget _buildProjectTab() {
+    if (_relatedProjects.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(40),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.business_outlined,
+                color: Colors.white.withOpacity(0.3),
+                size: 60,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'No Related Projects',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.5),
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: 3,
+      itemCount: _relatedProjects.length,
       itemBuilder: (context, index) {
+        final project = _relatedProjects[index];
         return _ProjectItem(
-          projectName: index == 0 ? 'SeaShore Villa' : index == 1 ? 'SeaShore Chalet' : 'SeaShore Townhouse',
-          location: 'Ras El Hekma',
+          projectName: project.title,
+          location: project.location.isNotEmpty ? project.location : project.area,
+          projectId: project.id,
           onTap: () {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => const ProjectsListScreen(
-                  title: 'SeaShore Projects',
+                builder: (context) => ProjectDetailsScreen(
+                  projectId: project.id,
                 ),
               ),
             );
@@ -478,68 +1078,241 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   }
 
   Widget _buildReelsTab() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+    if (_clips.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(40),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.video_library_outlined,
+                color: Colors.white.withOpacity(0.3),
+                size: 60,
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'No Reels Available',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.7),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Reels for this project will appear here',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.4),
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _clips.length,
+      itemBuilder: (context, index) {
+        final clip = _clips[index];
+        return _ClipItem(
+          clip: clip,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ReelsPlayerScreen(
+                  clips: _clips,
+                  initialIndex: index,
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildMbTab() {
+    if (_pdfFiles.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(40),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.picture_as_pdf_outlined,
+                color: Colors.white.withOpacity(0.3),
+                size: 60,
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'No PDF Files Available',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.7),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'PDF files for this project will appear here',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.4),
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _pdfFiles.length,
+      itemBuilder: (context, index) {
+        final pdfFile = _pdfFiles[index];
+        return _PdfFileItem(
+          pdfFile: pdfFile,
+          onDownload: () => _downloadPdf(pdfFile),
+        );
+      },
+    );
+  }
+
+  Future<void> _downloadPdf(PdfFileModel pdfFile) async {
+    try {
+      // Open PDF in browser or download
+      final uri = Uri.parse(pdfFile.fileUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        _showSnackBar('Opening PDF...', isError: false);
+      } else {
+        _showSnackBar('Could not open PDF', isError: true);
+      }
+    } catch (e) {
+      _showSnackBar('Error opening PDF: $e', isError: true);
+    }
+  }
+}
+
+class _PdfFileItem extends StatelessWidget {
+  final PdfFileModel pdfFile;
+  final VoidCallback onDownload;
+
+  const _PdfFileItem({
+    required this.pdfFile,
+    required this.onDownload,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onDownload,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
           children: [
-            Icon(
-              Icons.video_library_outlined,
-              color: Colors.white.withOpacity(0.5),
-              size: 60,
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Watch Reels',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
+            // PDF Icon
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE50914).withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.picture_as_pdf,
+                color: Color(0xFFE50914),
+                size: 28,
               ),
             ),
-            const SizedBox(height: 10),
-            Text(
-              'View all reels for this project',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.4),
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: 30),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const ClipsScreen(),
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: brandRed,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 30,
-                  vertical: 14,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(25),
-                ),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
+            const SizedBox(width: 14),
+            // Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.play_arrow, size: 20),
-                  SizedBox(width: 8),
                   Text(
-                    'Go to Reels',
-                    style: TextStyle(
-                      fontSize: 14,
+                    pdfFile.title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (pdfFile.description != null && pdfFile.description!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      pdfFile.description!,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.5),
+                        fontSize: 12,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.description,
+                        color: Colors.white.withOpacity(0.4),
+                        size: 12,
+                      ),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          pdfFile.fileName,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.4),
+                            fontSize: 11,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        pdfFile.formattedFileSize,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.4),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
+              ),
+            ),
+            // Download button
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: const Color(0xFFE50914).withOpacity(0.5),
+                  width: 1.5,
+                ),
+              ),
+              child: const Icon(
+                Icons.download,
+                color: Color(0xFFE50914),
+                size: 20,
               ),
             ),
           ],
@@ -549,92 +1322,263 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   }
 }
 
-class _EpisodeItem extends StatelessWidget {
-  final int episodeNumber;
-  final String duration;
+class _ClipItem extends StatelessWidget {
+  final ClipModel clip;
+  final VoidCallback? onTap;
 
-  const _EpisodeItem({
-    required this.episodeNumber,
-    required this.duration,
+  const _ClipItem({
+    required this.clip,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Row(
-        children: [
-          // Thumbnail
-          Container(
-            width: 90,
-            height: 65,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFFD4A574),
-                  Color(0xFFC49A6C),
-                  Color(0xFFB8906A),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            // Thumbnail
+            ClipRRect(
+              borderRadius: const BorderRadius.horizontal(left: Radius.circular(12)),
+              child: Stack(
+                children: [
+                  Container(
+                    width: 120,
+                    height: 90,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.grey.shade800,
+                          Colors.grey.shade900,
+                        ],
+                      ),
+                    ),
+                    child: clip.thumbnail.isNotEmpty
+                        ? (clip.isAsset
+                            ? Image.asset(
+                                clip.thumbnail,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                              )
+                            : Image.network(
+                                clip.thumbnail,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                              ))
+                        : _buildPlaceholder(),
+                  ),
+                  // Play icon overlay
+                  Positioned.fill(
+                    child: Container(
+                      color: Colors.black26,
+                      child: const Center(
+                        child: Icon(
+                          Icons.play_circle_outline,
+                          color: Colors.white,
+                          size: 36,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
-            child: Center(
-              child: Text(
-                'TAWNY',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.9),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1,
+            // Info
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      clip.title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      clip.description,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.5),
+                        fontSize: 12,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.favorite,
+                          color: Colors.white.withOpacity(0.4),
+                          size: 14,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${clip.likes}',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.4),
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          clip.developerName,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.4),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 14),
-          // Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Episode $episodeNumber',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlaceholder() {
+    return const Center(
+      child: Icon(
+        Icons.video_library,
+        color: Colors.white54,
+        size: 30,
+      ),
+    );
+  }
+}
+
+class _EpisodeItem extends StatelessWidget {
+  final int episodeNumber;
+  final String duration;
+  final String title;
+  final String thumbnail;
+  final bool isAsset;
+  final VoidCallback? onTap;
+
+  const _EpisodeItem({
+    required this.episodeNumber,
+    required this.duration,
+    this.title = '',
+    this.thumbnail = '',
+    this.isAsset = false,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Row(
+          children: [
+            // Thumbnail
+            Container(
+              width: 90,
+              height: 65,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFFD4A574),
+                    Color(0xFFC49A6C),
+                    Color(0xFFB8906A),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  duration,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.5),
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Play button
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: Colors.white.withOpacity(0.3),
-                width: 1.5,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: thumbnail.isNotEmpty
+                    ? (isAsset
+                        ? Image.asset(
+                            thumbnail,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                          )
+                        : Image.network(
+                            thumbnail,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                          ))
+                    : _buildPlaceholder(),
               ),
             ),
-            child: const Icon(
-              Icons.play_arrow,
-              color: Colors.white,
-              size: 22,
+            const SizedBox(width: 14),
+            // Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title.isNotEmpty ? title : 'Episode $episodeNumber',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    duration,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.5),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+            // Play button
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.3),
+                  width: 1.5,
+                ),
+              ),
+              child: const Icon(
+                Icons.play_arrow,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlaceholder() {
+    return Center(
+      child: Text(
+        'EP $episodeNumber',
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.9),
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1,
+        ),
       ),
     );
   }
@@ -643,11 +1587,13 @@ class _EpisodeItem extends StatelessWidget {
 class _ProjectItem extends StatelessWidget {
   final String projectName;
   final String location;
+  final String projectId;
   final VoidCallback onTap;
 
   const _ProjectItem({
     required this.projectName,
     required this.location,
+    required this.projectId,
     required this.onTap,
   });
 

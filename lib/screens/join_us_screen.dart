@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/api/admin_api.dart';
 
 class JoinUsScreen extends StatefulWidget {
   const JoinUsScreen({super.key});
@@ -13,6 +14,11 @@ class _JoinUsScreenState extends State<JoinUsScreen> {
   final _projectNameController = TextEditingController();
   final _orientationsController = TextEditingController();
   final _notesController = TextEditingController();
+  
+  final AdminApi _adminApi = AdminApi();
+  bool _isLoading = false;
+  
+  static const Color brandRed = Color(0xFFE50914);
 
   @override
   void dispose() {
@@ -87,9 +93,7 @@ class _JoinUsScreenState extends State<JoinUsScreen> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
+                  onPressed: _isLoading ? null : _handleSubmit,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF2A2A2A),
                     foregroundColor: Colors.white,
@@ -98,13 +102,22 @@ class _JoinUsScreenState extends State<JoinUsScreen> {
                     ),
                     elevation: 0,
                   ),
-                  child: const Text(
-                    'Send',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text(
+                          'Send',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
               ),
             ),
@@ -181,6 +194,83 @@ class _JoinUsScreenState extends State<JoinUsScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _handleSubmit() async {
+    // Validate required fields
+    if (_companyNameController.text.trim().isEmpty ||
+        _headOfficeController.text.trim().isEmpty ||
+        _projectNameController.text.trim().isEmpty ||
+        _orientationsController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please fill all required fields'),
+          backgroundColor: brandRed,
+        ),
+      );
+      return;
+    }
+
+    // Parse orientations count
+    final orientationsCount = int.tryParse(_orientationsController.text.trim());
+    if (orientationsCount == null || orientationsCount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid number of orientations'),
+          backgroundColor: brandRed,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final request = JoinRequestModel(
+        id: '',
+        userId: '',
+        companyName: _companyNameController.text.trim(),
+        headOffice: _headOfficeController.text.trim(),
+        projectName: _projectNameController.text.trim(),
+        orientationsCount: orientationsCount,
+        notes: _notesController.text.trim().isEmpty 
+            ? null 
+            : _notesController.text.trim(),
+        createdAt: DateTime.now(),
+      );
+
+      final success = await _adminApi.submitJoinRequest(request);
+      
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Request submitted successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pop(context);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: brandRed,
+          ),
+        );
+      }
+    }
   }
 }
 

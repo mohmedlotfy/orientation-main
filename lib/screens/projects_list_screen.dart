@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import '../widgets/project_card.dart';
+import '../services/api/project_api.dart';
+import '../services/api/home_api.dart';
+import '../models/project_model.dart';
+import '../models/episode_model.dart';
+import 'episode_player_screen.dart';
+import 'package:share_plus/share_plus.dart';
 
-class ProjectsListScreen extends StatelessWidget {
+class ProjectsListScreen extends StatefulWidget {
   final String title;
   final int resultCount;
   final bool showSearch;
@@ -13,7 +19,169 @@ class ProjectsListScreen extends StatelessWidget {
     this.showSearch = true,
   });
 
+  @override
+  State<ProjectsListScreen> createState() => _ProjectsListScreenState();
+}
+
+class _ProjectsListScreenState extends State<ProjectsListScreen> {
   static const Color brandRed = Color(0xFFE50914);
+  final HomeApi _homeApi = HomeApi();
+  final ProjectApi _projectApi = ProjectApi();
+  bool _isLoading = true;
+  List<ProjectModel> _projects = [];
+  Map<String, bool> _savedProjects = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProjects();
+  }
+
+  Future<void> _loadProjects() async {
+    try {
+      final projects = await _homeApi.getLatestProjects();
+      // Load saved status for each project
+      final savedStatus = <String, bool>{};
+      for (final project in projects) {
+        savedStatus[project.id] = await _projectApi.isProjectSaved(project.id);
+      }
+      if (mounted) {
+        setState(() {
+          _projects = projects;
+          _savedProjects = savedStatus;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleWatch(ProjectModel project) async {
+    try {
+      // Get episodes for this project
+      final episodes = await _projectApi.getEpisodes(project.id);
+      
+      if (episodes.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No episodes available for this project'),
+              backgroundColor: brandRed,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Find the episode with the highest watch progress (last watched)
+      EpisodeModel? episodeToPlay;
+      double maxProgress = 0.0;
+
+      for (final episode in episodes) {
+        final progress = await _projectApi.getWatchingProgress(project.id, episode.id);
+        if (progress > maxProgress) {
+          maxProgress = progress;
+          episodeToPlay = episode;
+        }
+      }
+
+      // If no episode has progress, use first episode
+      episodeToPlay ??= episodes.first;
+      
+      if (mounted) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => EpisodePlayerScreen(
+              episode: episodeToPlay!,
+              projectTitle: project.title,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: brandRed,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleBookmark(ProjectModel project) async {
+    try {
+      final isSaved = await _projectApi.isProjectSaved(project.id);
+      if (isSaved) {
+        await _projectApi.unsaveProject(project.id);
+        if (mounted) {
+          setState(() {
+            _savedProjects[project.id] = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Removed from saved'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        await _projectApi.saveProject(project.id);
+        if (mounted) {
+          setState(() {
+            _savedProjects[project.id] = true;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Saved!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: brandRed,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleShare(ProjectModel project) async {
+    final shareText = '''
+🏗️ ${project.title}
+📍 ${project.location}
+👷 ${project.developerName}
+
+${project.script ?? 'Check out this amazing project!'}
+
+شاهد المزيد على تطبيق Orientation!
+''';
+
+    try {
+      await Share.share(shareText, subject: project.title);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error sharing'),
+            backgroundColor: brandRed,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +193,7 @@ class ProjectsListScreen extends StatelessWidget {
             // App bar
             _buildAppBar(context),
             // Search bar (optional)
-            if (showSearch) _buildSearchBar(),
+            if (widget.showSearch) _buildSearchBar(),
             // Results header
             _buildResultsHeader(),
             // List
@@ -54,7 +222,7 @@ class ProjectsListScreen extends StatelessWidget {
           Expanded(
             child: Center(
               child: Text(
-                title,
+                widget.title,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 18,
@@ -127,7 +295,7 @@ class ProjectsListScreen extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Text(
-            '($resultCount Orientation)',
+            '(${widget.resultCount} Orientation)',
             style: const TextStyle(
               color: brandRed,
               fontSize: 14,
@@ -140,17 +308,47 @@ class ProjectsListScreen extends StatelessWidget {
   }
 
   Widget _buildProjectList() {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(
+          color: brandRed,
+        ),
+      );
+    }
+
+    if (_projects.isEmpty) {
+      return Center(
+        child: Text(
+          'No projects found',
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.6),
+            fontSize: 16,
+          ),
+        ),
+      );
+    }
+
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: 10,
+      itemCount: _projects.length,
       itemBuilder: (context, index) {
+        final project = _projects[index];
+        final gradientColors = project.gradientColors.map((c) {
+          final hex = c.replaceAll('0x', '');
+          return Color(int.parse(hex, radix: 16));
+        }).toList();
+        
+        final isSaved = _savedProjects[project.id] ?? false;
+        
         return ProjectListItem(
-          developerName: 'The Icon',
-          projectName: 'Masaya',
-          gradientColors: const [Color(0xFF4A90A4), Color(0xFF2d6a7a)],
-          onWatch: () {},
-          onBookmark: () {},
-          onShare: () {},
+          projectId: project.id,
+          developerName: project.developerName,
+          projectName: project.title,
+          gradientColors: gradientColors,
+          isSaved: isSaved,
+          onWatch: () => _handleWatch(project),
+          onBookmark: () => _handleBookmark(project),
+          onShare: () => _handleShare(project),
         );
       },
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/auth_header.dart';
 import '../widgets/custom_text_field.dart';
+import '../services/api/auth_api.dart';
 import 'change_password_screen.dart';
 
 class OtpScreen extends StatefulWidget {
@@ -24,6 +25,10 @@ class _OtpScreenState extends State<OtpScreen> {
     4,
     (index) => FocusNode(),
   );
+  final AuthApi _authApi = AuthApi();
+
+  bool _isLoading = false;
+  String? _errorMessage;
 
   static const Color brandRed = Color(0xFFE50914);
 
@@ -44,6 +49,48 @@ class _OtpScreenState extends State<OtpScreen> {
     }
     if (value.isEmpty && index > 0) {
       _focusNodes[index - 1].requestFocus();
+    }
+    setState(() {}); // Update UI
+  }
+
+  String get _otpCode {
+    return _controllers.map((c) => c.text).join();
+  }
+
+  Future<void> _handleVerifyOtp() async {
+    if (_otpCode.length != 4) {
+      setState(() {
+        _errorMessage = 'Please enter the 4-digit code';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await _authApi.verifyOTP(widget.email, _otpCode);
+
+      if (!mounted) return;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const ChangePasswordScreen(),
+        ),
+      );
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -114,35 +161,82 @@ class _OtpScreenState extends State<OtpScreen> {
                         );
                       }),
                     ),
-                    const SizedBox(height: 150),
-                    // Send code button
+                    // Error message
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: brandRed.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: brandRed.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline, color: brandRed, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _errorMessage!,
+                                style: const TextStyle(color: brandRed, fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    // Dev mode hint
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.blue.withOpacity(0.8), size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Dev Mode: Use code 1234',
+                            style: TextStyle(color: Colors.blue.withOpacity(0.8), fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 100),
+                    // Verify button
                     SizedBox(
                       width: double.infinity,
                       height: 52,
                       child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const ChangePasswordScreen(),
-                            ),
-                          );
-                        },
+                        onPressed: _isLoading ? null : _handleVerifyOtp,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF2A2A2A),
                           foregroundColor: Colors.white,
+                          disabledBackgroundColor: const Color(0xFF2A2A2A).withOpacity(0.5),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(30),
                           ),
                           elevation: 0,
                         ),
-                        child: const Text(
-                          'Send code',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              )
+                            : const Text(
+                                'Verify',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                       ),
                     ),
                     const SizedBox(height: 20),

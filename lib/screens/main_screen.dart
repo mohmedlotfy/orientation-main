@@ -14,13 +14,8 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
-
-  final List<Widget> _screens = [
-    const HomeFeedScreen(),
-    const ClipsScreen(),
-    const NewsScreen(),
-    const AccountScreen(userRole: UserRole.developer),
-  ];
+  final GlobalKey<ClipsScreenState> _clipsKey = GlobalKey<ClipsScreenState>();
+  final GlobalKey<State<HomeFeedScreen>> _homeKey = GlobalKey<State<HomeFeedScreen>>();
 
   @override
   Widget build(BuildContext context) {
@@ -28,11 +23,34 @@ class _MainScreenState extends State<MainScreen> {
       backgroundColor: Colors.black,
       body: IndexedStack(
         index: _currentIndex,
-        children: _screens,
+        children: [
+          HomeFeedScreen(key: _homeKey),
+          ClipsScreen(key: _clipsKey),
+          const NewsScreen(),
+          const AccountScreen(),
+        ],
       ),
       bottomNavigationBar: BottomNavBar(
         currentIndex: _currentIndex,
         onTap: (index) {
+          // Update clips visibility
+          if (index == 1) {
+            // Going to clips tab - make visible
+            _clipsKey.currentState?.setVisible(true);
+          } else if (_currentIndex == 1) {
+            // Leaving clips tab - make invisible
+            _clipsKey.currentState?.setVisible(false);
+          }
+          
+          // Refresh continue watching when returning to Home tab
+          if (index == 0 && _currentIndex != 0) {
+            final homeState = _homeKey.currentState;
+            if (homeState != null) {
+              // Call refresh method using dynamic to avoid type checking issues
+              (homeState as dynamic).refreshContinueWatching();
+            }
+          }
+          
           setState(() {
             _currentIndex = index;
           });
@@ -63,4 +81,3 @@ class _PlaceholderScreen extends StatelessWidget {
     );
   }
 }
-

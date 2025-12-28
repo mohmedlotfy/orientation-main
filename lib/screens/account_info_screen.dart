@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/api/auth_api.dart';
 
 class AccountInfoScreen extends StatefulWidget {
   const AccountInfoScreen({super.key});
@@ -10,20 +11,169 @@ class AccountInfoScreen extends StatefulWidget {
 class _AccountInfoScreenState extends State<AccountInfoScreen> {
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
-  final _locationController = TextEditingController();
+  final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  
+  final _authApi = AuthApi();
+  bool _isLoading = false;
+  bool _isLoadingData = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
 
   @override
   void dispose() {
     _firstNameController.dispose();
     _lastNameController.dispose();
-    _locationController.dispose();
+    _emailController.dispose();
     _phoneController.dispose();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadUserData() async {
+    setState(() {
+      _isLoadingData = true;
+    });
+
+    try {
+      final profile = await _authApi.getUserProfile();
+      
+      if (mounted) {
+        setState(() {
+          _firstNameController.text = profile['firstName'] ?? '';
+          _lastNameController.text = profile['lastName'] ?? '';
+          _emailController.text = profile['email'] ?? '';
+          _phoneController.text = profile['phoneNumber'] ?? '';
+          _isLoadingData = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingData = false;
+          _errorMessage = 'Error loading profile: $e';
+        });
+      }
+    }
+  }
+
+  Future<void> _saveChanges() async {
+    // Validation for personal info
+    if (_firstNameController.text.trim().isEmpty) {
+      _showSnackBar('Please enter your first name', isError: true);
+      return;
+    }
+
+    if (_lastNameController.text.trim().isEmpty) {
+      _showSnackBar('Please enter your last name', isError: true);
+      return;
+    }
+
+    if (_emailController.text.trim().isEmpty) {
+      _showSnackBar('Please enter your email', isError: true);
+      return;
+    }
+
+    // Email validation
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(_emailController.text.trim())) {
+      _showSnackBar('Please enter a valid email address', isError: true);
+      return;
+    }
+
+    if (_phoneController.text.trim().isEmpty) {
+      _showSnackBar('Please enter your phone number', isError: true);
+      return;
+    }
+
+    // Validation for password (if provided)
+    if (_newPasswordController.text.isNotEmpty || _confirmPasswordController.text.isNotEmpty) {
+      if (_newPasswordController.text.isEmpty) {
+        _showSnackBar('Please enter a new password', isError: true);
+        return;
+      }
+
+      if (_newPasswordController.text != _confirmPasswordController.text) {
+        _showSnackBar('Passwords do not match', isError: true);
+        return;
+      }
+
+      if (_newPasswordController.text.length < 6) {
+        _showSnackBar('Password must be at least 6 characters', isError: true);
+        return;
+      }
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // Update profile
+      await _authApi.updateProfile(
+        firstName: _firstNameController.text.trim(),
+        lastName: _lastNameController.text.trim(),
+        email: _emailController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
+      );
+
+      // Update password if provided
+      if (_newPasswordController.text.isNotEmpty) {
+        await _authApi.updatePassword(
+          newPassword: _newPasswordController.text,
+        );
+      }
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        _showSnackBar('Profile updated successfully!', isSuccess: true);
+        
+        // Clear password fields
+        _newPasswordController.clear();
+        _confirmPasswordController.clear();
+        
+        // Navigate back after a short delay with result to refresh AccountScreen
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted) {
+            Navigator.pop(context, true); // Pass true to indicate profile was updated
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = e.toString();
+        });
+        _showSnackBar('Error: $e', isError: true);
+      }
+    }
+  }
+
+  void _showSnackBar(String message, {bool isError = false, bool isSuccess = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError
+            ? Colors.red
+            : isSuccess
+                ? Colors.green
+                : Colors.grey[800],
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   @override
@@ -37,11 +187,32 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
             _buildAppBar(context),
             // Form
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+              child: _isLoadingData
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFFE50914),
+                      ),
+                    )
+                  : SingleChildScrollView(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (_errorMessage != null) ...[
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              margin: const EdgeInsets.only(bottom: 16),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.red),
+                              ),
+                              child: Text(
+                                _errorMessage!,
+                                style: const TextStyle(color: Colors.red),
+                              ),
+                            ),
+                          ],
                     // Edit Personal Info section
                     const Text(
                       'Edit Personal Info',
@@ -63,8 +234,9 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
                     ),
                     const SizedBox(height: 16),
                     _buildTextField(
-                      controller: _locationController,
-                      hint: 'Location*',
+                      controller: _emailController,
+                      hint: 'Email*',
+                      keyboardType: TextInputType.emailAddress,
                     ),
                     const SizedBox(height: 16),
                     _buildTextField(
@@ -105,9 +277,7 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
+                  onPressed: _isLoading ? null : _saveChanges,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF2A2A2A),
                     foregroundColor: Colors.white,
@@ -116,13 +286,22 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
                     ),
                     elevation: 0,
                   ),
-                  child: const Text(
-                    'Save Changes',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text(
+                          'Save Changes',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
               ),
             ),
