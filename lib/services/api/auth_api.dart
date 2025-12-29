@@ -13,6 +13,11 @@ class AuthApi {
   // TODO: Set to false when backend is ready
   static const bool _devMode = true;
 
+  /// Set the API base URL dynamically
+  void setBaseUrl(String url) {
+    _dioClient.setBaseUrl(url);
+  }
+
   /// Login with email and password
   Future<AuthResponse> login(String email, String password) async {
     // Dev mode: bypass backend and login directly

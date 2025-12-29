@@ -10,14 +10,21 @@ class DioClient {
   // For Android emulator use: http://10.0.2.2:3000
   // For iOS simulator use: http://localhost:3000
   // For physical device use your computer's IP: http://172.20.10.3:3000
-  static const String baseUrl = 'http://172.20.10.3:3000';
+  static const String defaultBaseUrl = 'http://172.20.10.3:3000';
+  String _baseUrl = defaultBaseUrl;
 
   late Dio dio;
+
+  /// Set the base URL dynamically
+  void setBaseUrl(String url) {
+    _baseUrl = url;
+    init(); // Reinitialize with new URL
+  }
 
   void init() {
     dio = Dio(
       BaseOptions(
-        baseUrl: baseUrl,
+        baseUrl: _baseUrl,
         connectTimeout: const Duration(seconds: 30),
         receiveTimeout: const Duration(seconds: 30),
         headers: {

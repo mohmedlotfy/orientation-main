@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/project_card.dart';
-import '../services/api/project_api.dart';
 import '../services/api/home_api.dart';
+import '../services/api/project_api.dart';
 import '../models/project_model.dart';
 import '../models/episode_model.dart';
 import '../utils/auth_helper.dart';
@@ -9,23 +9,14 @@ import 'episode_player_screen.dart';
 import 'project_details_screen.dart';
 import 'package:share_plus/share_plus.dart';
 
-class ProjectsListScreen extends StatefulWidget {
-  final String title;
-  final int resultCount;
-  final bool showSearch;
-
-  const ProjectsListScreen({
-    super.key,
-    required this.title,
-    this.resultCount = 24,
-    this.showSearch = true,
-  });
+class ContinueWatchingScreen extends StatefulWidget {
+  const ContinueWatchingScreen({super.key});
 
   @override
-  State<ProjectsListScreen> createState() => _ProjectsListScreenState();
+  State<ContinueWatchingScreen> createState() => _ContinueWatchingScreenState();
 }
 
-class _ProjectsListScreenState extends State<ProjectsListScreen> {
+class _ContinueWatchingScreenState extends State<ContinueWatchingScreen> {
   static const Color brandRed = Color(0xFFE50914);
   final HomeApi _homeApi = HomeApi();
   final ProjectApi _projectApi = ProjectApi();
@@ -36,12 +27,16 @@ class _ProjectsListScreenState extends State<ProjectsListScreen> {
   @override
   void initState() {
     super.initState();
-    _loadProjects();
+    _loadContinueWatching();
   }
 
-  Future<void> _loadProjects() async {
+  Future<void> _loadContinueWatching() async {
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
-      final projects = await _homeApi.getLatestProjects();
+      final projects = await _homeApi.getContinueWatching();
       // Load saved status for each project
       final savedStatus = <String, bool>{};
       for (final project in projects) {
@@ -64,6 +59,9 @@ class _ProjectsListScreenState extends State<ProjectsListScreen> {
   }
 
   Future<void> _handleWatch(ProjectModel project) async {
+    final isAuth = await AuthHelper.requireAuth(context);
+    if (!isAuth) return;
+
     try {
       // Get episodes for this project
       final episodes = await _projectApi.getEpisodes(project.id);
@@ -105,6 +103,8 @@ class _ProjectsListScreenState extends State<ProjectsListScreen> {
             ),
           ),
         );
+        // Refresh after returning from player
+        _loadContinueWatching();
       }
     } catch (e) {
       if (mounted) {
@@ -119,6 +119,9 @@ class _ProjectsListScreenState extends State<ProjectsListScreen> {
   }
 
   Future<void> _handleBookmark(ProjectModel project) async {
+    final isAuth = await AuthHelper.requireAuth(context);
+    if (!isAuth) return;
+
     try {
       final isSaved = await _projectApi.isProjectSaved(project.id);
       if (isSaved) {
@@ -185,6 +188,20 @@ ${project.script ?? 'Check out this amazing project!'}
     }
   }
 
+  void _openProjectDetails(ProjectModel project) async {
+    final isAuth = await AuthHelper.requireAuth(context);
+    if (!isAuth) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProjectDetailsScreen(
+          projectId: project.id,
+        ),
+      ),
+    ).then((_) => _loadContinueWatching()); // Refresh after returning
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -194,8 +211,6 @@ ${project.script ?? 'Check out this amazing project!'}
           children: [
             // App bar
             _buildAppBar(context),
-            // Search bar (optional)
-            if (widget.showSearch) _buildSearchBar(),
             // Results header
             _buildResultsHeader(),
             // List
@@ -221,11 +236,11 @@ ${project.script ?? 'Check out this amazing project!'}
               size: 28,
             ),
           ),
-          Expanded(
+          const Expanded(
             child: Center(
               child: Text(
-                widget.title,
-                style: const TextStyle(
+                'Continue Watching',
+                style: TextStyle(
                   color: Colors.white,
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -235,49 +250,6 @@ ${project.script ?? 'Check out this amazing project!'}
           ),
           const SizedBox(width: 28),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Container(
-        height: 48,
-        decoration: BoxDecoration(
-          color: const Color(0xFF1A1A1A),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.1),
-          ),
-        ),
-        child: Row(
-          children: [
-            const SizedBox(width: 16),
-            Icon(
-              Icons.search,
-              color: Colors.white.withOpacity(0.5),
-              size: 22,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextField(
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Search for a project....',
-                  hintStyle: TextStyle(
-                    color: Colors.white.withOpacity(0.4),
-                    fontSize: 14,
-                  ),
-                  border: InputBorder.none,
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -297,7 +269,7 @@ ${project.script ?? 'Check out this amazing project!'}
           ),
           const SizedBox(width: 8),
           Text(
-            '(${widget.resultCount} Orientation)',
+            '(${_projects.length} Orientation)',
             style: const TextStyle(
               color: brandRed,
               fontSize: 14,
@@ -320,52 +292,68 @@ ${project.script ?? 'Check out this amazing project!'}
 
     if (_projects.isEmpty) {
       return Center(
-        child: Text(
-          'No projects found',
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.6),
-            fontSize: 16,
-          ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.play_circle_outline,
+              color: Colors.white.withOpacity(0.3),
+              size: 80,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'No Continue Watching',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40),
+              child: Text(
+                'Projects you watch will appear here for easy access',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.4),
+                  fontSize: 14,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
         ),
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: _projects.length,
-      itemBuilder: (context, index) {
-        final project = _projects[index];
-        final gradientColors = project.gradientColors.map((c) {
-          final hex = c.replaceAll('0x', '');
-          return Color(int.parse(hex, radix: 16));
-        }).toList();
-        
-        final isSaved = _savedProjects[project.id] ?? false;
-        
-        return ProjectListItem(
-          projectId: project.id,
-          developerName: project.developerName,
-          projectName: project.title,
-          gradientColors: gradientColors,
-          isSaved: isSaved,
-          onTap: () async {
-            final isAuth = await AuthHelper.requireAuth(context);
-            if (!isAuth) return;
-            
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ProjectDetailsScreen(
-                  projectId: project.id,
-                ),
-              ),
-            ).then((_) => _loadProjects()); // Refresh after returning
-          },
-          onWatch: () => _handleWatch(project),
-          onBookmark: () => _handleBookmark(project),
-          onShare: () => _handleShare(project),
-        );
-      },
+    return RefreshIndicator(
+      onRefresh: _loadContinueWatching,
+      color: brandRed,
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        itemCount: _projects.length,
+        itemBuilder: (context, index) {
+          final project = _projects[index];
+          final gradientColors = project.gradientColors.map((c) {
+            final hex = c.replaceAll('0x', '');
+            return Color(int.parse(hex, radix: 16));
+          }).toList();
+          
+          final isSaved = _savedProjects[project.id] ?? false;
+          
+          return ProjectListItem(
+            projectId: project.id,
+            developerName: project.developerName,
+            projectName: project.title,
+            gradientColors: gradientColors,
+            isSaved: isSaved,
+            onTap: () => _openProjectDetails(project),
+            onWatch: () => _handleWatch(project),
+            onBookmark: () => _handleBookmark(project),
+            onShare: () => _handleShare(project),
+          );
+        },
+      ),
     );
   }
 }

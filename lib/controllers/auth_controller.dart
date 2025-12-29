@@ -6,8 +6,24 @@ class AuthController extends ChangeNotifier {
 
   bool loading = false;
   String? errorMessage;
+  bool _isLoggedIn = false;
 
-  AuthController({AuthApi? authApi}) : _authApi = authApi ?? AuthApi();
+  AuthController({AuthApi? authApi}) : _authApi = authApi ?? AuthApi() {
+    _checkAuthStatus();
+  }
+
+  bool get isLoggedIn => _isLoggedIn;
+
+  /// Check authentication status
+  Future<void> _checkAuthStatus() async {
+    _isLoggedIn = await _authApi.isLoggedIn();
+    notifyListeners();
+  }
+
+  /// Refresh authentication status
+  Future<void> refreshAuthStatus() async {
+    await _checkAuthStatus();
+  }
 
   /// Sets the API base URL
   void setApiBaseUrl(String url) {
@@ -15,44 +31,60 @@ class AuthController extends ChangeNotifier {
   }
 
   /// Login with email and password
-  /// TODO: Replace placeholder handling with real API logic
   Future<bool> login(String email, String password) async {
     try {
       loading = true;
       errorMessage = null;
       notifyListeners();
 
-      // Placeholder: Will call real API when available
       await _authApi.login(email, password);
 
+      _isLoggedIn = true;
       loading = false;
       notifyListeners();
       return true;
     } catch (e) {
+      _isLoggedIn = false;
       loading = false;
-      errorMessage = "Placeholder: ${e.toString()}";
+      errorMessage = e.toString();
       notifyListeners();
       return false;
     }
   }
 
-  /// Register with email and password
-  /// TODO: Replace placeholder handling with real API logic
-  Future<bool> register(String email, String password) async {
+  /// Logout
+  Future<void> logout() async {
+    await _authApi.logout();
+    _isLoggedIn = false;
+    notifyListeners();
+  }
+
+  /// Register with username, email, phone number and password
+  Future<bool> register({
+    required String username,
+    required String email,
+    required String phoneNumber,
+    required String password,
+  }) async {
     try {
       loading = true;
       errorMessage = null;
       notifyListeners();
 
-      // Placeholder: Will call real API when available
-      await _authApi.register(email, password);
+      await _authApi.register(
+        username: username,
+        email: email,
+        phoneNumber: phoneNumber,
+        password: password,
+      );
 
+      _isLoggedIn = true;
       loading = false;
       notifyListeners();
       return true;
     } catch (e) {
       loading = false;
-      errorMessage = "Placeholder: ${e.toString()}";
+      errorMessage = e.toString();
       notifyListeners();
       return false;
     }

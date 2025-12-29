@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/clip_model.dart';
 import '../services/api/project_api.dart';
+import '../utils/auth_helper.dart';
 import 'project_details_screen.dart';
 
 class ClipsScreen extends StatefulWidget {
@@ -216,6 +217,9 @@ class ClipsScreenState extends State<ClipsScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _toggleSave(int index) async {
+    final isAuth = await AuthHelper.requireAuth(context);
+    if (!isAuth) return;
+    
     final clip = _clips[index];
     final isCurrentlySaved = _savedClips[index] ?? false;
 
@@ -268,7 +272,10 @@ ${clip.description}
     }
   }
 
-  void _openProjectDetails(ClipModel clip) {
+  void _openProjectDetails(ClipModel clip) async {
+    final isAuth = await AuthHelper.requireAuth(context);
+    if (!isAuth) return;
+    
     // Pause current video before navigating
     pauseAllVideos();
     
@@ -280,7 +287,10 @@ ${clip.description}
     );
   }
 
-  void _openEpisodes(ClipModel clip) {
+  void _openEpisodes(ClipModel clip) async {
+    final isAuth = await AuthHelper.requireAuth(context);
+    if (!isAuth) return;
+    
     // Pause current video before navigating
     pauseAllVideos();
     

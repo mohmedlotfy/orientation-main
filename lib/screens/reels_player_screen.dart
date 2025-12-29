@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/clip_model.dart';
 import '../services/api/project_api.dart';
+import '../utils/auth_helper.dart';
 import 'project_details_screen.dart';
 
 class ReelsPlayerScreen extends StatefulWidget {
@@ -193,6 +194,9 @@ class _ReelsPlayerScreenState extends State<ReelsPlayerScreen> with WidgetsBindi
   }
 
   Future<void> _toggleSave(int index) async {
+    final isAuth = await AuthHelper.requireAuth(context);
+    if (!isAuth) return;
+    
     final clip = widget.clips[index];
     final isCurrentlySaved = _savedClips[index] ?? false;
 
@@ -245,7 +249,10 @@ ${clip.description}
     }
   }
 
-  void _openProjectDetails(ClipModel clip) {
+  void _openProjectDetails(ClipModel clip) async {
+    final isAuth = await AuthHelper.requireAuth(context);
+    if (!isAuth) return;
+    
     _pauseAllVideos();
     Navigator.push(
       context,
@@ -255,7 +262,10 @@ ${clip.description}
     );
   }
 
-  void _openEpisodes(ClipModel clip) {
+  void _openEpisodes(ClipModel clip) async {
+    final isAuth = await AuthHelper.requireAuth(context);
+    if (!isAuth) return;
+    
     _pauseAllVideos();
     // Navigate to Project Details on Episodes tab
     Navigator.push(

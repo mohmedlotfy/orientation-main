@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import '../dio_client.dart';
 import '../../models/project_model.dart';
 import '../../models/episode_model.dart';
 import '../../models/clip_model.dart';
@@ -6,6 +7,12 @@ import '../../models/pdf_file_model.dart';
 import '../../data/mock_data.dart';
 
 class ProjectApi {
+  final DioClient _dioClient = DioClient();
+
+  ProjectApi() {
+    _dioClient.init();
+  }
+
   // Dev mode flag - set to false when real API is ready
   static const bool _devMode = true;
 
@@ -17,7 +24,7 @@ class ProjectApi {
     }
 
     // TODO: Real API call
-    // final response = await _dio.get('/projects/$id');
+    // final response = await _dioClient.dio.get('/projects/$id');
     // return ProjectModel.fromJson(response.data);
     return null;
   }
@@ -30,7 +37,7 @@ class ProjectApi {
     }
 
     // TODO: Real API call
-    // final response = await _dio.get('/projects/$projectId/episodes');
+    // final response = await _dioClient.dio.get('/projects/$projectId/episodes');
     // return (response.data as List).map((e) => EpisodeModel.fromJson(e)).toList();
     return [];
   }
@@ -61,7 +68,7 @@ class ProjectApi {
     }
 
     // TODO: Real API call
-    // await _dio.post('/projects/$projectId/save');
+    // await _dioClient.dio.post('/projects/$projectId/save');
   }
 
   // Remove project from favorites
@@ -76,7 +83,7 @@ class ProjectApi {
     }
 
     // TODO: Real API call
-    // await _dio.delete('/projects/$projectId/save');
+    // await _dioClient.dio.delete('/projects/$projectId/save');
   }
 
   // Get all saved projects
@@ -94,7 +101,7 @@ class ProjectApi {
     }
 
     // TODO: Real API call
-    // final response = await _dio.get('/projects/saved');
+    // final response = await _dioClient.dio.get('/projects/saved');
     // return (response.data as List).map((e) => ProjectModel.fromJson(e)).toList();
     return [];
   }
@@ -111,7 +118,7 @@ class ProjectApi {
     }
 
     // TODO: Real API call
-    // await _dio.post('/projects/$projectId/episodes/$episodeId/progress', data: {'progress': progress});
+    // await _dioClient.dio.post('/projects/$projectId/episodes/$episodeId/progress', data: {'progress': progress});
   }
 
   // Get watching progress
@@ -193,7 +200,7 @@ class ProjectApi {
     }
 
     // TODO: Real API call
-    // final response = await _dio.get('/projects/continue-watching');
+    // final response = await _dioClient.dio.get('/projects/continue-watching');
     // return (response.data as List).map((e) => ProjectModel.fromJson(e)).toList();
     return [];
   }
@@ -206,7 +213,7 @@ class ProjectApi {
     }
 
     // TODO: Real API call
-    // final response = await _dio.get('/projects/$projectId/clips');
+    // final response = await _dioClient.dio.get('/projects/$projectId/clips');
     // return (response.data as List).map((e) => ClipModel.fromJson(e)).toList();
     return [];
   }
@@ -316,7 +323,7 @@ class ProjectApi {
     //   'projectId': projectId,
     //   'hasWhatsApp': hasWhatsApp,
     // });
-    // final response = await _dio.post('/clips', data: formData);
+    // final response = await _dioClient.dio.post('/clips', data: formData);
     // return response.statusCode == 200;
     return false;
   }
@@ -329,7 +336,7 @@ class ProjectApi {
     }
 
     // TODO: Real API call
-    // final response = await _dio.get('/developers/$developerId/projects');
+    // final response = await _dioClient.dio.get('/developers/$developerId/projects');
     // return (response.data as List).map((e) => ProjectModel.fromJson(e)).toList();
     return [];
   }
@@ -348,7 +355,7 @@ class ProjectApi {
     }
 
     // TODO: Real API call
-    // final response = await _dio.put('/projects/$projectId/inventory', data: {
+    // final response = await _dioClient.dio.put('/projects/$projectId/inventory', data: {
     //   'inventoryUrl': inventoryUrl,
     // });
     // return response.statusCode == 200;

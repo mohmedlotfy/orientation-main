@@ -5,6 +5,7 @@ import '../services/api/auth_api.dart';
 import '../models/project_model.dart';
 import '../models/developer_model.dart';
 import '../models/area_model.dart';
+import '../utils/auth_helper.dart';
 import 'project_details_screen.dart';
 import 'latest_for_us_screen.dart';
 import 'top_10_screen.dart';
@@ -13,6 +14,7 @@ import 'developers_screen.dart';
 import 'areas_screen.dart';
 import 'projects_list_screen.dart';
 import 'search_screen.dart';
+import 'continue_watching_screen.dart';
 
 class HomeFeedScreen extends StatefulWidget {
   const HomeFeedScreen({super.key});
@@ -190,7 +192,14 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
           SliverToBoxAdapter(
             child: _buildSection(
               'Continue watching',
-              onViewAll: () {},
+              onViewAll: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ContinueWatchingScreen(),
+                  ),
+                );
+              },
               child: Column(
                 children: [
                   // Test button (for debugging - remove in production)
@@ -376,7 +385,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
         ? _featuredProjects[_currentFeaturedPage] 
         : null;
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
+        final isAuth = await AuthHelper.requireAuth(context);
+        if (!isAuth) return;
+        
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -599,7 +611,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
               color: Colors.white,
               size: 24,
             ),
-            onPressed: () {
+            onPressed: () async {
+              final isAuth = await AuthHelper.requireAuth(context);
+              if (!isAuth) return;
+              
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -776,7 +791,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
       }
     }
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
+        final isAuth = await AuthHelper.requireAuth(context);
+        if (!isAuth) return;
+        
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -1164,7 +1182,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
       }
     }
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
+        final isAuth = await AuthHelper.requireAuth(context);
+        if (!isAuth) return;
+        
         Navigator.push(
           context,
           MaterialPageRoute(

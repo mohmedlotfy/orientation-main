@@ -411,6 +411,7 @@ class ProjectListItem extends StatelessWidget {
   final VoidCallback? onWatch;
   final VoidCallback? onBookmark;
   final VoidCallback? onShare;
+  final VoidCallback? onTap;
 
   const ProjectListItem({
     super.key,
@@ -422,6 +423,7 @@ class ProjectListItem extends StatelessWidget {
     this.onWatch,
     this.onBookmark,
     this.onShare,
+    this.onTap,
   });
 
   @override
@@ -431,24 +433,27 @@ class ProjectListItem extends StatelessWidget {
       child: Row(
         children: [
           // Thumbnail
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: gradientColors,
+          GestureDetector(
+            onTap: onTap,
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: gradientColors,
+                ),
+                borderRadius: BorderRadius.circular(8),
               ),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Center(
-              child: Text(
-                'masaya',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.8),
-                  fontSize: 14,
-                  fontStyle: FontStyle.italic,
+              child: Center(
+                child: Text(
+                  'masaya',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.8),
+                    fontSize: 14,
+                    fontStyle: FontStyle.italic,
+                  ),
                 ),
               ),
             ),

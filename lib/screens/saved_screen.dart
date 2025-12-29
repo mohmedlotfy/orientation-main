@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/project_model.dart';
 import '../services/api/project_api.dart';
+import '../utils/auth_helper.dart';
 import 'project_details_screen.dart';
+import 'login_screen.dart';
 
 class SavedScreen extends StatefulWidget {
   const SavedScreen({super.key});
@@ -44,6 +46,9 @@ class _SavedScreenState extends State<SavedScreen> {
   }
 
   Future<void> _removeFromSaved(ProjectModel project) async {
+    final isAuth = await AuthHelper.requireAuth(context);
+    if (!isAuth) return;
+    
     // Optimistic update
     setState(() {
       _savedProjects.removeWhere((p) => p.id == project.id);
@@ -199,7 +204,10 @@ class _SavedScreenState extends State<SavedScreen> {
           final project = _savedProjects[index];
           return _SavedProjectItem(
             project: project,
-            onTap: () {
+            onTap: () async {
+              final isAuth = await AuthHelper.requireAuth(context);
+              if (!isAuth) return;
+              
               Navigator.push(
                 context,
                 MaterialPageRoute(

@@ -11,6 +11,7 @@ import '../models/episode_model.dart';
 import '../models/clip_model.dart';
 import '../models/pdf_file_model.dart';
 import '../services/api/project_api.dart';
+import '../utils/auth_helper.dart';
 import '../data/mock_data.dart';
 
 class ProjectDetailsScreen extends StatefulWidget {
@@ -212,6 +213,9 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
 
   Future<void> _toggleSave() async {
     if (_project == null) return;
+    
+    final isAuth = await AuthHelper.requireAuth(context);
+    if (!isAuth) return;
     
     final wasSaved = _isSaved;
     setState(() {

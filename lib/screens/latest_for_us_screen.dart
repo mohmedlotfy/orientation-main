@@ -4,7 +4,9 @@ import '../services/api/project_api.dart';
 import '../services/api/home_api.dart';
 import '../models/project_model.dart';
 import '../models/episode_model.dart';
+import '../utils/auth_helper.dart';
 import 'episode_player_screen.dart';
+import 'project_details_screen.dart';
 import 'package:share_plus/share_plus.dart';
 
 class LatestForUsScreen extends StatefulWidget {
@@ -337,6 +339,19 @@ ${project.script ?? 'Check out this amazing project!'}
           projectName: project.title,
           gradientColors: gradientColors,
           isSaved: isSaved,
+          onTap: () async {
+            final isAuth = await AuthHelper.requireAuth(context);
+            if (!isAuth) return;
+            
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ProjectDetailsScreen(
+                  projectId: project.id,
+                ),
+              ),
+            ).then((_) => _loadProjects()); // Refresh after returning
+          },
           onWatch: () => _handleWatch(project),
           onBookmark: () => _handleBookmark(project),
           onShare: () => _handleShare(project),
