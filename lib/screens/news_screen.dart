@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/api/news_api.dart';
 import '../services/notification_service.dart';
 import '../models/news_model.dart';
+import '../utils/auth_helper.dart';
 import 'project_details_screen.dart';
 
 class NewsScreen extends StatefulWidget {
@@ -172,6 +173,9 @@ class _NewsScreenState extends State<NewsScreen> {
               );
             },
             onRemindToggle: () async {
+              final isAuth = await AuthHelper.requireAuth(context);
+              if (!isAuth) return;
+              
               final news = _news[index];
               if (news.isReminded) {
                 await _newsApi.unremindNews(news.id);

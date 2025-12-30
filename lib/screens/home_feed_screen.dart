@@ -183,7 +183,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
           SliverToBoxAdapter(
             child: _buildSection(
               'The latest for us',
-              onViewAll: () {
+              onViewAll: () async {
+                final isAuth = await AuthHelper.requireAuth(context);
+                if (!isAuth) return;
+                
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -197,7 +200,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
           SliverToBoxAdapter(
             child: _buildSection(
               'Continue watching',
-              onViewAll: () {
+              onViewAll: () async {
+                final isAuth = await AuthHelper.requireAuth(context);
+                if (!isAuth) return;
+                
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -228,7 +234,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
           SliverToBoxAdapter(
             child: _buildSection(
               'Top 10',
-              onViewAll: () {
+              onViewAll: () async {
+                final isAuth = await AuthHelper.requireAuth(context);
+                if (!isAuth) return;
+                
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -242,7 +251,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
           SliverToBoxAdapter(
             child: _buildSection(
               'Projects in Northcoast',
-              onViewAll: () {
+              onViewAll: () async {
+                final isAuth = await AuthHelper.requireAuth(context);
+                if (!isAuth) return;
+                
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -258,7 +270,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
           SliverToBoxAdapter(
             child: _buildSection(
               'Projects in Dubai',
-              onViewAll: () {
+              onViewAll: () async {
+                final isAuth = await AuthHelper.requireAuth(context);
+                if (!isAuth) return;
+                
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -274,7 +289,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
           SliverToBoxAdapter(
             child: _buildSection(
               'Projects in Oman',
-              onViewAll: () {
+              onViewAll: () async {
+                final isAuth = await AuthHelper.requireAuth(context);
+                if (!isAuth) return;
+                
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -297,7 +315,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
           SliverToBoxAdapter(
             child: _buildSection(
               'Developers',
-              onViewAll: () {
+              onViewAll: () async {
+                final isAuth = await AuthHelper.requireAuth(context);
+                if (!isAuth) return;
+                
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -311,7 +332,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
           SliverToBoxAdapter(
             child: _buildSection(
               'Discover Areas',
-              onViewAll: () {
+              onViewAll: () async {
+                final isAuth = await AuthHelper.requireAuth(context);
+                if (!isAuth) return;
+                
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -390,10 +414,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
         ? _featuredProjects[_currentFeaturedPage] 
         : null;
     return GestureDetector(
-      onTap: () async {
-        final isAuth = await AuthHelper.requireAuth(context);
-        if (!isAuth) return;
-        
+      onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -615,7 +636,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
               color: Colors.white,
               size: 24,
             ),
-            onPressed: () {
+            onPressed: () async {
+              final isAuth = await AuthHelper.requireAuth(context);
+              if (!isAuth) return;
+              
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -811,10 +835,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
       }
     }
     return GestureDetector(
-      onTap: () async {
-        final isAuth = await AuthHelper.requireAuth(context);
-        if (!isAuth) return;
-        
+      onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -1202,10 +1223,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
       }
     }
     return GestureDetector(
-      onTap: () async {
-        final isAuth = await AuthHelper.requireAuth(context);
-        if (!isAuth) return;
-        
+      onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(

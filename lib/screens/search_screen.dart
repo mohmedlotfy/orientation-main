@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/project_card.dart';
+import '../utils/auth_helper.dart';
 import 'project_details_screen.dart';
 import 'latest_for_us_screen.dart';
 import 'projects_list_screen.dart';
@@ -73,6 +74,11 @@ class _SearchScreenState extends State<SearchScreen> {
     {'id': '3', 'name': 'Dubai', 'projects': 120, 'image': 'assets/areas/dubai.png'},
     {'id': '4', 'name': 'Oman', 'projects': 25, 'image': 'assets/areas/oman.png'},
   ];
+
+  @override
+  void initState() {
+    super.initState();
+  }
 
   @override
   void dispose() {
@@ -595,13 +601,16 @@ class _SearchScreenState extends State<SearchScreen> {
             imageAsset: 'assets/top10/masaya.png',
             hasPromo: true,
             gradientColors: const [Color(0xFF5a8a9a), Color(0xFF3a6a7a)],
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ProjectDetailsScreen(),
-                ),
-              );
+            onTap: () async {
+              final isLoggedIn = await AuthHelper.requireAuth(context);
+              if (isLoggedIn && context.mounted) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ProjectDetailsScreen(),
+                  ),
+                );
+              }
             },
           ),
           const SizedBox(width: 12),
@@ -653,13 +662,16 @@ class _SearchScreenState extends State<SearchScreen> {
             gradientColors: const [Color(0xFF5a8a9a), Color(0xFF3a6a7a)],
             width: 150,
             height: 150,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ProjectDetailsScreen(),
-                ),
-              );
+            onTap: () async {
+              final isLoggedIn = await AuthHelper.requireAuth(context);
+              if (isLoggedIn && context.mounted) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ProjectDetailsScreen(),
+                  ),
+                );
+              }
             },
           ),
           const SizedBox(width: 12),

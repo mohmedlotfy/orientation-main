@@ -45,10 +45,7 @@ class _Top10ScreenState extends State<Top10Screen> {
     }
   }
 
-  void _openProjectDetails(ProjectModel project) async {
-    final isAuth = await AuthHelper.requireAuth(context);
-    if (!isAuth) return;
-
+  void _openProjectDetails(ProjectModel project) {
     Navigator.push(
       context,
       MaterialPageRoute(

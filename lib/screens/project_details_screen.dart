@@ -240,6 +240,9 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   }
 
   Future<void> _openWhatsApp() async {
+    final isAuth = await AuthHelper.requireAuth(context);
+    if (!isAuth) return;
+    
     if (_project == null || _project!.whatsappNumber.isEmpty) {
       _showSnackBar('WhatsApp number not available', isError: true);
       return;
@@ -263,6 +266,9 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   }
 
   Future<void> _openLocation() async {
+    final isAuth = await AuthHelper.requireAuth(context);
+    if (!isAuth) return;
+    
     if (_project == null || _project!.locationUrl.isEmpty) {
       _showSnackBar('Location not available', isError: true);
       return;
@@ -277,6 +283,9 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   }
 
   Future<void> _copyScript() async {
+    final isAuth = await AuthHelper.requireAuth(context);
+    if (!isAuth) return;
+    
     if (_project == null || _project!.script.isEmpty) {
       _showSnackBar('Script not available', isError: true);
       return;
@@ -287,6 +296,9 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   }
 
   Future<void> _shareProject() async {
+    final isAuth = await AuthHelper.requireAuth(context);
+    if (!isAuth) return;
+    
     if (_project == null) {
       _showSnackBar('Nothing to share', isError: true);
       return;
@@ -311,6 +323,9 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
   }
 
   Future<void> _openInventory() async {
+    final isAuth = await AuthHelper.requireAuth(context);
+    if (!isAuth) return;
+    
     if (_project == null || _project!.inventoryUrl.isEmpty) {
       _showSnackBar('Inventory not available', isError: true);
       return;
@@ -1013,6 +1028,9 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
           thumbnail: episode.thumbnail,
           isAsset: episode.isAsset,
           onTap: () async {
+            final isAuth = await AuthHelper.requireAuth(context);
+            if (!isAuth) return;
+            
             await Navigator.push(
               context,
               MaterialPageRoute(
@@ -1124,7 +1142,10 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
         final clip = _clips[index];
         return _ClipItem(
           clip: clip,
-          onTap: () {
+          onTap: () async {
+            final isAuth = await AuthHelper.requireAuth(context);
+            if (!isAuth) return;
+            
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -1190,6 +1211,9 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
   }
 
   Future<void> _downloadPdf(PdfFileModel pdfFile) async {
+    final isAuth = await AuthHelper.requireAuth(context);
+    if (!isAuth) return;
+    
     try {
       // Open PDF in browser or download
       final uri = Uri.parse(pdfFile.fileUrl);

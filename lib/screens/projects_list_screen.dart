@@ -348,10 +348,7 @@ ${project.script ?? 'Check out this amazing project!'}
           projectName: project.title,
           gradientColors: gradientColors,
           isSaved: isSaved,
-          onTap: () async {
-            final isAuth = await AuthHelper.requireAuth(context);
-            if (!isAuth) return;
-            
+          onTap: () {
             Navigator.push(
               context,
               MaterialPageRoute(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/bottom_nav_bar.dart';
+import '../utils/auth_helper.dart';
 import 'home_feed_screen.dart';
 import 'clips_screen.dart';
 import 'news_screen.dart';
@@ -32,7 +33,34 @@ class _MainScreenState extends State<MainScreen> {
       ),
       bottomNavigationBar: BottomNavBar(
         currentIndex: _currentIndex,
-        onTap: (index) {
+        onTap: (index) async {
+          // Home tab (index 0) - no auth required
+          if (index == 0) {
+            // Update clips visibility
+            if (_currentIndex == 1) {
+              // Leaving clips tab - make invisible
+              _clipsKey.currentState?.setVisible(false);
+            }
+            
+            // Refresh continue watching when returning to Home tab
+            if (_currentIndex != 0) {
+              final homeState = _homeKey.currentState;
+              if (homeState != null) {
+                // Call refresh method using dynamic to avoid type checking issues
+                (homeState as dynamic).refreshContinueWatching();
+              }
+            }
+            
+            setState(() {
+              _currentIndex = index;
+            });
+            return;
+          }
+          
+          // Clips, News, or Account tabs - require auth
+          final isAuth = await AuthHelper.requireAuth(context);
+          if (!isAuth) return;
+          
           // Update clips visibility
           if (index == 1) {
             // Going to clips tab - make visible
@@ -40,15 +68,6 @@ class _MainScreenState extends State<MainScreen> {
           } else if (_currentIndex == 1) {
             // Leaving clips tab - make invisible
             _clipsKey.currentState?.setVisible(false);
-          }
-          
-          // Refresh continue watching when returning to Home tab
-          if (index == 0 && _currentIndex != 0) {
-            final homeState = _homeKey.currentState;
-            if (homeState != null) {
-              // Call refresh method using dynamic to avoid type checking issues
-              (homeState as dynamic).refreshContinueWatching();
-            }
           }
           
           setState(() {

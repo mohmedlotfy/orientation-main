@@ -83,12 +83,21 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+    final isKeyboardVisible = keyboardHeight > 0;
+    
     return Scaffold(
       backgroundColor: Colors.black,
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
-          physics: const NeverScrollableScrollPhysics(),
+          physics: isKeyboardVisible 
+              ? const ClampingScrollPhysics() 
+              : const NeverScrollableScrollPhysics(),
+          padding: EdgeInsets.only(
+            bottom: keyboardHeight > 0 ? 20 : 0,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

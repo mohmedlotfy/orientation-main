@@ -188,10 +188,7 @@ ${project.script ?? 'Check out this amazing project!'}
     }
   }
 
-  void _openProjectDetails(ProjectModel project) async {
-    final isAuth = await AuthHelper.requireAuth(context);
-    if (!isAuth) return;
-
+  void _openProjectDetails(ProjectModel project) {
     Navigator.push(
       context,
       MaterialPageRoute(

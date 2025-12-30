@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/orientation_logo.dart';
 import '../services/api/auth_api.dart';
+import '../utils/auth_helper.dart';
 import 'account_info_screen.dart';
 import 'join_us_screen.dart';
 import 'login_screen.dart';
@@ -161,6 +162,9 @@ class _AccountScreenState extends State<AccountScreen> {
     // All users can see these
     menuItems.add(
       _MenuItem(title: 'Account', subtitle: 'Information', onTap: () async {
+        final isAuth = await AuthHelper.requireAuth(context);
+        if (!isAuth) return;
+        
         final result = await Navigator.push(
           context,
           MaterialPageRoute(
@@ -177,7 +181,10 @@ class _AccountScreenState extends State<AccountScreen> {
     // Admin only: Dashboard
     if (userRole == UserRole.admin) {
       menuItems.add(
-        _MenuItem(title: 'Admin', subtitle: 'Dashboard', onTap: () {
+        _MenuItem(title: 'Admin', subtitle: 'Dashboard', onTap: () async {
+          final isAuth = await AuthHelper.requireAuth(context);
+          if (!isAuth) return;
+          
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -191,7 +198,10 @@ class _AccountScreenState extends State<AccountScreen> {
     // Users can apply to become developers
     if (userRole == UserRole.user) {
       menuItems.add(
-        _MenuItem(title: 'Join', subtitle: 'Us', onTap: () {
+        _MenuItem(title: 'Join', subtitle: 'Us', onTap: () async {
+          final isAuth = await AuthHelper.requireAuth(context);
+          if (!isAuth) return;
+          
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -205,7 +215,10 @@ class _AccountScreenState extends State<AccountScreen> {
     // Developers can add reels and change inventory
     if (userRole == UserRole.developer || userRole == UserRole.admin) {
       menuItems.add(
-        _MenuItem(title: 'Add', subtitle: 'Reel', onTap: () {
+        _MenuItem(title: 'Add', subtitle: 'Reel', onTap: () async {
+          final isAuth = await AuthHelper.requireAuth(context);
+          if (!isAuth) return;
+          
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -215,7 +228,10 @@ class _AccountScreenState extends State<AccountScreen> {
         }),
       );
       menuItems.add(
-        _MenuItem(title: 'Change', subtitle: 'Inventory', onTap: () {
+        _MenuItem(title: 'Change', subtitle: 'Inventory', onTap: () async {
+          final isAuth = await AuthHelper.requireAuth(context);
+          if (!isAuth) return;
+          
           Navigator.push(
             context,
             MaterialPageRoute(
