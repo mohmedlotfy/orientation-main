@@ -20,7 +20,6 @@ class ClipsScreenState extends State<ClipsScreen> with WidgetsBindingObserver {
   
   List<ClipModel> _clips = [];
   final Map<int, VideoPlayerController> _controllers = {};
-  final Map<int, bool> _likedClips = {};
   final Map<int, bool> _savedClips = {};
   int _currentIndex = 0;
   bool _isLoading = true;
@@ -75,7 +74,6 @@ class ClipsScreenState extends State<ClipsScreen> with WidgetsBindingObserver {
         });
         if (clips.isNotEmpty) {
           _initializeVideoAt(0);
-          _loadLikedStatus();
           _loadSavedStatus();
         }
       }
@@ -83,17 +81,6 @@ class ClipsScreenState extends State<ClipsScreen> with WidgetsBindingObserver {
       if (mounted) {
         setState(() {
           _isLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _loadLikedStatus() async {
-    for (int i = 0; i < _clips.length; i++) {
-      final isLiked = await _projectApi.isClipLiked(_clips[i].id);
-      if (mounted) {
-        setState(() {
-          _likedClips[i] = isLiked;
         });
       }
     }
@@ -193,27 +180,6 @@ class ClipsScreenState extends State<ClipsScreen> with WidgetsBindingObserver {
       controller.dispose();
     }
     super.dispose();
-  }
-
-  Future<void> _toggleLike(int index) async {
-    final clip = _clips[index];
-    final isCurrentlyLiked = _likedClips[index] ?? false;
-
-    setState(() {
-      _likedClips[index] = !isCurrentlyLiked;
-    });
-
-    try {
-      if (!isCurrentlyLiked) {
-        await _projectApi.likeClip(clip.id);
-      } else {
-        await _projectApi.unlikeClip(clip.id);
-      }
-    } catch (e) {
-      setState(() {
-        _likedClips[index] = isCurrentlyLiked;
-      });
-    }
   }
 
   Future<void> _toggleSave(int index) async {
@@ -382,7 +348,6 @@ ${clip.description}
   Widget _buildClipItem(int index) {
     final clip = _clips[index];
     final controller = _controllers[index];
-    final isLiked = _likedClips[index] ?? false;
     final isSaved = _savedClips[index] ?? false;
 
     return Stack(
@@ -468,14 +433,6 @@ ${clip.description}
                 imagePath: 'assets/icons_clips/whatsapp.png',
                 label: 'WhatsApp',
                 onTap: () => _openWhatsApp(clip),
-              ),
-              const SizedBox(height: 18),
-              _ActionButton(
-                imagePath: isLiked ? '' : 'assets/icons_clips/like.png',
-                icon: isLiked ? Icons.favorite : null,
-                iconColor: isLiked ? brandRed : Colors.white,
-                label: '${clip.likes + (isLiked ? 1 : 0)}',
-                onTap: () => _toggleLike(index),
               ),
               const SizedBox(height: 18),
               _ActionButton(

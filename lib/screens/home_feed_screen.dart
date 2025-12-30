@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/project_card.dart';
+import '../widgets/app_drawer.dart';
 import '../services/api/home_api.dart';
 import '../services/api/auth_api.dart';
 import '../models/project_model.dart';
@@ -15,6 +16,7 @@ import 'areas_screen.dart';
 import 'projects_list_screen.dart';
 import 'search_screen.dart';
 import 'continue_watching_screen.dart';
+import 'account_screen.dart';
 
 class HomeFeedScreen extends StatefulWidget {
   const HomeFeedScreen({super.key});
@@ -27,6 +29,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
   final PageController _featuredController = PageController();
   final HomeApi _homeApi = HomeApi();
   final AuthApi _authApi = AuthApi();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   
   int _currentFeaturedPage = 0;
   String _selectedFilter = 'Medical';
@@ -163,7 +166,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: Colors.black,
+      drawer: const AppDrawer(),
       body: CustomScrollView(
         slivers: [
           // Hero section with AppBar, Filters, and Carousel
@@ -536,32 +541,47 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
       child: Row(
         children: [
           // Menu icon
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.menu,
-              color: Colors.white,
-              size: 22,
+          GestureDetector(
+            onTap: () {
+              _scaffoldKey.currentState?.openDrawer();
+            },
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.menu,
+                color: Colors.white,
+                size: 22,
+              ),
             ),
           ),
           const SizedBox(width: 12),
           // Profile avatar
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: Colors.grey[700],
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.person,
-              color: Colors.white,
-              size: 20,
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const AccountScreen(),
+                ),
+              );
+            },
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: Colors.grey[700],
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.person,
+                color: Colors.white,
+                size: 20,
+              ),
             ),
           ),
           const SizedBox(width: 10),
