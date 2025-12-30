@@ -47,10 +47,37 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
       final profile = await _authApi.getUserProfile();
       
       if (mounted) {
+        // Get email from stored user info to ensure it has @
+        final userInfo = await _authApi.getStoredUserInfo();
+        final storedEmail = userInfo['email'] ?? '';
+        final profileEmail = profile['email'] ?? '';
+        
+        // Prioritize email with @ symbol
+        String emailToUse = '';
+        if (storedEmail.isNotEmpty && storedEmail.contains('@')) {
+          emailToUse = storedEmail;
+        } else if (profileEmail.isNotEmpty && profileEmail.contains('@')) {
+          emailToUse = profileEmail;
+        } else if (storedEmail.isNotEmpty) {
+          emailToUse = storedEmail;
+        } else if (profileEmail.isNotEmpty) {
+          emailToUse = profileEmail;
+        }
+        
+        // If email doesn't contain @, try to reconstruct it
+        if (emailToUse.isNotEmpty && !emailToUse.contains('@')) {
+          // Try to add @ if it's missing (e.g., "mohmed gmail.com" -> "mohmed@gmail.com")
+          final parts = emailToUse.split(' ');
+          if (parts.length >= 2) {
+            // If there's a space, assume format is "username domain.com"
+            emailToUse = '${parts[0]}@${parts.sublist(1).join('')}';
+          }
+        }
+        
         setState(() {
           _firstNameController.text = profile['firstName'] ?? '';
           _lastNameController.text = profile['lastName'] ?? '';
-          _emailController.text = profile['email'] ?? '';
+          _emailController.text = emailToUse;
           _phoneController.text = profile['phoneNumber'] ?? '';
           _isLoadingData = false;
         });
@@ -118,11 +145,17 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
     });
 
     try {
-      // Update profile
+      // Update profile - ensure email is preserved with @
+      final emailText = _emailController.text.trim();
+      if (!emailText.contains('@')) {
+        _showSnackBar('Please enter a valid email address with @', isError: true);
+        return;
+      }
+      
       await _authApi.updateProfile(
         firstName: _firstNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
-        email: _emailController.text.trim(),
+        email: emailText,
         phoneNumber: _phoneController.text.trim(),
       );
 

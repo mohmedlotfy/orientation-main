@@ -151,6 +151,8 @@ class AuthApi {
       'email': prefs.getString('user_email'),
       'username': prefs.getString('user_name'),
       'role': prefs.getString('user_role') ?? 'user',
+      'firstName': prefs.getString('user_first_name'),
+      'lastName': prefs.getString('user_last_name'),
     };
   }
 
@@ -270,12 +272,39 @@ class AuthApi {
 
     try {
       final response = await _dioClient.dio.get('/auth/profile');
+      final firstName = response.data['firstName'] ?? '';
+      final lastName = response.data['lastName'] ?? '';
+      final email = response.data['email'] ?? '';
+      final phoneNumber = response.data['phoneNumber'] ?? '';
+      final username = response.data['username'] ?? '';
+      
+      // Save to local storage
+      final prefs = await SharedPreferences.getInstance();
+      if (firstName.isNotEmpty) {
+        await prefs.setString('user_first_name', firstName);
+      }
+      if (lastName.isNotEmpty) {
+        await prefs.setString('user_last_name', lastName);
+      }
+      if (email.isNotEmpty) {
+        await prefs.setString('user_email', email);
+      }
+      if (phoneNumber.isNotEmpty) {
+        await prefs.setString('user_phone', phoneNumber);
+      }
+      // Update username to reflect first name and last name if available
+      if (firstName.isNotEmpty || lastName.isNotEmpty) {
+        await prefs.setString('user_name', '$firstName $lastName'.trim());
+      } else if (username.isNotEmpty) {
+        await prefs.setString('user_name', username);
+      }
+      
       return {
-        'firstName': response.data['firstName'] ?? '',
-        'lastName': response.data['lastName'] ?? '',
-        'email': response.data['email'] ?? '',
-        'phoneNumber': response.data['phoneNumber'] ?? '',
-        'username': response.data['username'] ?? '',
+        'firstName': firstName,
+        'lastName': lastName,
+        'email': email,
+        'phoneNumber': phoneNumber,
+        'username': username,
       };
     } on DioException catch (e) {
       throw _handleError(e);
@@ -292,10 +321,15 @@ class AuthApi {
     if (_devMode) {
       await Future.delayed(const Duration(milliseconds: 500));
       
+      // Ensure email contains @ before saving
+      if (!email.contains('@')) {
+        throw Exception('Email must contain @ symbol');
+      }
+      
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('user_first_name', firstName);
       await prefs.setString('user_last_name', lastName);
-      await prefs.setString('user_email', email);
+      await prefs.setString('user_email', email); // Save email with @
       await prefs.setString('user_phone', phoneNumber);
       
       // Update username to reflect first name and last name
@@ -305,7 +339,7 @@ class AuthApi {
     }
 
     try {
-      await _dioClient.dio.put(
+      final response = await _dioClient.dio.put(
         '/auth/profile',
         data: {
           'firstName': firstName,
@@ -314,6 +348,21 @@ class AuthApi {
           'phoneNumber': phoneNumber,
         },
       );
+      
+      // Ensure email contains @ before saving
+      if (!email.contains('@')) {
+        throw Exception('Email must contain @ symbol');
+      }
+      
+      // Update local storage with new profile data
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_first_name', firstName);
+      await prefs.setString('user_last_name', lastName);
+      await prefs.setString('user_email', email); // Save email with @
+      await prefs.setString('user_phone', phoneNumber);
+      // Update username to reflect first name and last name
+      await prefs.setString('user_name', '$firstName $lastName');
+      
       return true;
     } on DioException catch (e) {
       throw _handleError(e);

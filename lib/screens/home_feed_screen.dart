@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/project_card.dart';
 import '../widgets/app_drawer.dart';
+import '../widgets/skeleton_loader.dart';
 import '../services/api/home_api.dart';
 import '../services/api/auth_api.dart';
 import '../models/project_model.dart';
@@ -112,9 +113,21 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
     final userInfo = await _authApi.getStoredUserInfo();
     if (mounted) {
       setState(() {
-        _userName = userInfo['username'] ?? 'User';
+        // Use firstName + lastName if available, otherwise fallback to username
+        final firstName = userInfo['firstName'] ?? '';
+        final lastName = userInfo['lastName'] ?? '';
+        if (firstName.isNotEmpty || lastName.isNotEmpty) {
+          _userName = '$firstName $lastName'.trim();
+        } else {
+          _userName = userInfo['username'] ?? 'User';
+        }
       });
     }
+  }
+
+  // Public method to refresh user name (called from MainScreen)
+  void refreshUserName() {
+    _loadUserName();
   }
 
   Future<void> _loadData() async {
@@ -930,6 +943,23 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
   }
 
   Widget _buildContinueWatchingList() {
+    if (_isLoading) {
+      return SizedBox(
+        height: 110,
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: 3,
+          itemBuilder: (context, index) {
+            return Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: const SkeletonProjectCard(),
+            );
+          },
+        ),
+      );
+    }
+    
     if (_continueWatching.isEmpty) {
       return SizedBox(
         height: 110,

@@ -10,6 +10,7 @@ class ClipModel {
   final String developerLogo;
   final int likes;
   final bool isLiked;
+  final bool hasWhatsApp;
   final DateTime? createdAt;
 
   ClipModel({
@@ -24,6 +25,7 @@ class ClipModel {
     this.developerLogo = '',
     this.likes = 0,
     this.isLiked = false,
+    this.hasWhatsApp = true,
     this.createdAt,
   });
 
@@ -40,6 +42,7 @@ class ClipModel {
       developerLogo: json['developerLogo'] ?? '',
       likes: json['likes'] ?? 0,
       isLiked: json['isLiked'] ?? false,
+      hasWhatsApp: json['hasWhatsApp'] ?? true,
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'])
           : null,
@@ -59,6 +62,7 @@ class ClipModel {
       'developerLogo': developerLogo,
       'likes': likes,
       'isLiked': isLiked,
+      'hasWhatsApp': hasWhatsApp,
       'createdAt': createdAt?.toIso8601String(),
     };
   }
@@ -75,6 +79,7 @@ class ClipModel {
     String? developerLogo,
     int? likes,
     bool? isLiked,
+    bool? hasWhatsApp,
     DateTime? createdAt,
   }) {
     return ClipModel(
@@ -89,6 +94,7 @@ class ClipModel {
       developerLogo: developerLogo ?? this.developerLogo,
       likes: likes ?? this.likes,
       isLiked: isLiked ?? this.isLiked,
+      hasWhatsApp: hasWhatsApp ?? this.hasWhatsApp,
       createdAt: createdAt ?? this.createdAt,
     );
   }

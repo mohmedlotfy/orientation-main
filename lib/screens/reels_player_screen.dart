@@ -433,14 +433,16 @@ ${clip.description}
           bottom: 200,
           child: Column(
             children: [
-              _ActionButton(
-                icon: Icons.chat,
-                label: 'WhatsApp',
-                onTap: () => _openWhatsApp(clip),
-                useImage: true,
-                imagePath: 'assets/icons_clips/whatsapp.png',
-              ),
-              const SizedBox(height: 18),
+              if (clip.hasWhatsApp) ...[
+                _ActionButton(
+                  icon: Icons.chat,
+                  label: 'WhatsApp',
+                  onTap: () => _openWhatsApp(clip),
+                  useImage: true,
+                  imagePath: 'assets/icons_clips/whatsapp.png',
+                ),
+                const SizedBox(height: 18),
+              ],
               _ActionButton(
                 icon: isLiked ? Icons.favorite : Icons.favorite_border,
                 label: '${clip.likes + (isLiked ? 1 : 0)}',

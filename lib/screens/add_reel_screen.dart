@@ -21,7 +21,6 @@ class _AddReelScreenState extends State<AddReelScreen> {
   
   bool _whatsAppEnabled = false;
   bool _watchOrientationEnabled = false;
-  String? _selectedOrientation;
   String? _selectedProjectId;
   File? _selectedVideo;
   bool _isLoading = false;
@@ -103,7 +102,7 @@ class _AddReelScreenState extends State<AddReelScreen> {
       return;
     }
 
-    if (_watchOrientationEnabled && _selectedOrientation == null) {
+    if (_watchOrientationEnabled && _selectedProjectId == null) {
       _showSnackBar('Please select an orientation', isError: true);
       return;
     }
@@ -118,17 +117,8 @@ class _AddReelScreenState extends State<AddReelScreen> {
       final developerName = 'Mountain View'; // Mock - replace with actual developer name
       final developerLogo = 'assets/developers/mountain_view.png'; // Mock
 
-      // Find project ID from selected orientation name
-      String? projectId;
-      if (_watchOrientationEnabled && _selectedOrientation != null) {
-        final project = _developerProjects.firstWhere(
-          (p) => p.title == _selectedOrientation,
-          orElse: () => _developerProjects.isNotEmpty 
-              ? _developerProjects.first 
-              : ProjectModel(id: '', title: '', image: ''),
-        );
-        projectId = project.id;
-      }
+      // Use selected project ID
+      final projectId = _watchOrientationEnabled ? _selectedProjectId : null;
 
       final success = await _projectApi.addReel(
         title: _titleController.text.trim(),
@@ -218,6 +208,36 @@ class _AddReelScreenState extends State<AddReelScreen> {
                     if (_watchOrientationEnabled) ...[
                       const SizedBox(height: 16),
                       _buildOrientationDropdown(),
+                    ],
+                    // Show selected project info
+                    if (_watchOrientationEnabled && _selectedProjectId != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2A2A2A),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.check_circle,
+                              color: brandRed,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Selected: ${_developerProjects.firstWhere((p) => p.id == _selectedProjectId, orElse: () => ProjectModel(id: '', title: 'Unknown', image: '')).title}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ],
                 ),
@@ -476,7 +496,7 @@ class _AddReelScreenState extends State<AddReelScreen> {
                   setState(() {
                     _watchOrientationEnabled = value;
                     if (!value) {
-                      _selectedOrientation = null;
+                      _selectedProjectId = null;
                     }
                   });
                 },
@@ -493,6 +513,21 @@ class _AddReelScreenState extends State<AddReelScreen> {
   }
 
   Widget _buildOrientationDropdown() {
+    // Ensure unique project IDs
+    final uniqueProjects = <String, ProjectModel>{};
+    for (final project in _developerProjects) {
+      if (!uniqueProjects.containsKey(project.id)) {
+        uniqueProjects[project.id] = project;
+      }
+    }
+    final projectsList = uniqueProjects.values.toList();
+
+    // Validate selected value exists in the list
+    String? validSelectedValue = _selectedProjectId;
+    if (validSelectedValue != null && !projectsList.any((p) => p.id == validSelectedValue)) {
+      validSelectedValue = null;
+    }
+
     return Container(
       decoration: BoxDecoration(
         border: Border.all(
@@ -503,7 +538,7 @@ class _AddReelScreenState extends State<AddReelScreen> {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: _selectedOrientation,
+          value: validSelectedValue,
           hint: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Text(
@@ -537,20 +572,32 @@ class _AddReelScreenState extends State<AddReelScreen> {
                     ),
                   ),
                 ]
-              : _developerProjects.map((ProjectModel project) {
-                  return DropdownMenuItem<String>(
-                    value: project.title,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(project.title),
-                    ),
-                  );
-                }).toList(),
-          onChanged: (String? newValue) {
-            setState(() {
-              _selectedOrientation = newValue;
-            });
-          },
+              : projectsList.isEmpty
+                  ? [
+                      const DropdownMenuItem<String>(
+                        value: null,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          child: Text('No projects available'),
+                        ),
+                      ),
+                    ]
+                  : projectsList.map((ProjectModel project) {
+                      return DropdownMenuItem<String>(
+                        value: project.id,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text(project.title),
+                        ),
+                      );
+                    }).toList(),
+          onChanged: _isLoadingProjects || projectsList.isEmpty
+              ? null
+              : (String? newValue) {
+                  setState(() {
+                    _selectedProjectId = newValue;
+                  });
+                },
         ),
       ),
     );

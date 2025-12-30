@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:dio/dio.dart';
 import '../dio_client.dart';
 import '../../models/project_model.dart';
 import '../../models/episode_model.dart';
@@ -301,6 +302,7 @@ class ProjectApi {
         developerLogo: developerLogo ?? '',
         likes: 0,
         isLiked: false,
+        hasWhatsApp: hasWhatsApp,
         createdAt: DateTime.now(),
       );
       
@@ -315,12 +317,29 @@ class ProjectApi {
       return true;
     }
 
-    // TODO: Real API call
-    // final formData = FormData.fromMap({
-    //   'title': title,
-    //   'description': description,
-    //   'video': await MultipartFile.fromFile(videoPath),
-    //   'projectId': projectId,
+    // Real API call
+    try {
+      final formData = FormData.fromMap({
+        'title': title,
+        'description': description,
+        'hasWhatsApp': hasWhatsApp,
+        if (projectId != null) 'projectId': projectId,
+        if (developerId != null) 'developerId': developerId,
+        if (developerName != null) 'developerName': developerName,
+        if (developerLogo != null) 'developerLogo': developerLogo,
+        if (videoPath != null) 'video': await MultipartFile.fromFile(videoPath),
+      });
+
+      final response = await _dioClient.dio.post(
+        '/clips',
+        data: formData,
+      );
+
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      print('Error adding reel: $e');
+      return false;
+    }
     //   'hasWhatsApp': hasWhatsApp,
     // });
     // final response = await _dioClient.dio.post('/clips', data: formData);

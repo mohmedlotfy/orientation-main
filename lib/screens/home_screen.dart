@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/auth_header.dart';
 import '../widgets/orientation_logo.dart';
+import '../services/api/auth_api.dart';
 import 'login_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -68,6 +69,137 @@ class AppDrawer extends StatelessWidget {
 
   static const Color brandRed = Color(0xFFE50914);
 
+  void _showLogoutDialog(BuildContext context) {
+    showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A1A1A),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.1),
+                width: 1,
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Icon
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: brandRed.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.logout,
+                      color: brandRed,
+                      size: 32,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  // Title
+                  const Text(
+                    'Confirm Logout',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Message
+                  Text(
+                    'Are you sure you want to logout?',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.7),
+                      fontSize: 15,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  // Buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(false),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(
+                                color: Colors.white.withOpacity(0.2),
+                              ),
+                            ),
+                          ),
+                          child: Text(
+                            'Cancel',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.8),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.of(context).pop(true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: brandRed,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            'Yes',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    ).then((shouldLogout) async {
+      if (shouldLogout == true) {
+        final authApi = AuthApi();
+        await authApi.logout();
+        if (context.mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const LoginScreen(),
+            ),
+            (route) => false,
+          );
+        }
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Drawer(
@@ -103,15 +235,7 @@ class AppDrawer extends StatelessWidget {
                 width: 140,
                 height: 44,
                 child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const LoginScreen(),
-                      ),
-                      (route) => false,
-                    );
-                  },
+                  onPressed: () => _showLogoutDialog(context),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: brandRed,
                     foregroundColor: Colors.white,

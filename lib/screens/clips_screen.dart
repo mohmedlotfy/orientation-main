@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import '../models/clip_model.dart';
 import '../services/api/project_api.dart';
 import '../utils/auth_helper.dart';
+import '../widgets/skeleton_loader.dart';
 import 'project_details_screen.dart';
 
 class ClipsScreen extends StatefulWidget {
@@ -64,8 +65,14 @@ class ClipsScreenState extends State<ClipsScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _loadClips() async {
+  Future<void> _loadClips({bool isRefresh = false}) async {
     try {
+      if (!isRefresh) {
+        setState(() {
+          _isLoading = true;
+        });
+      }
+      
       final clips = await _projectApi.getAllClips();
       if (mounted) {
         setState(() {
@@ -73,7 +80,13 @@ class ClipsScreenState extends State<ClipsScreen> with WidgetsBindingObserver {
           _isLoading = false;
         });
         if (clips.isNotEmpty) {
-          _initializeVideoAt(0);
+          // Dispose old controllers
+          for (var controller in _controllers.values) {
+            controller.dispose();
+          }
+          _controllers.clear();
+          
+          _initializeVideoAt(_currentIndex >= clips.length ? 0 : _currentIndex);
           _loadSavedStatus();
         }
       }
@@ -297,10 +310,14 @@ ${clip.description}
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
+      return Scaffold(
         backgroundColor: Colors.black,
-        body: Center(
-          child: CircularProgressIndicator(color: Color(0xFFE50914)),
+        body: PageView.builder(
+          scrollDirection: Axis.vertical,
+          itemCount: 3, // Show 3 skeleton items
+          itemBuilder: (context, index) {
+            return const SkeletonClipItem();
+          },
         ),
       );
     }
@@ -333,14 +350,20 @@ ${clip.description}
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: PageView.builder(
-        controller: _pageController,
-        scrollDirection: Axis.vertical,
-        itemCount: _clips.length,
-        onPageChanged: _onPageChanged,
-        itemBuilder: (context, index) {
-          return _buildClipItem(index);
-        },
+      body: RefreshIndicator(
+        onRefresh: () => _loadClips(isRefresh: true),
+        color: brandRed,
+        backgroundColor: Colors.white,
+        child: PageView.builder(
+          controller: _pageController,
+          scrollDirection: Axis.vertical,
+          itemCount: _clips.length,
+          onPageChanged: _onPageChanged,
+          physics: const AlwaysScrollableScrollPhysics(), // Enable pull to refresh
+          itemBuilder: (context, index) {
+            return _buildClipItem(index);
+          },
+        ),
       ),
     );
   }
@@ -429,12 +452,14 @@ ${clip.description}
           bottom: 200,
           child: Column(
             children: [
-              _ActionButton(
-                imagePath: 'assets/icons_clips/whatsapp.png',
-                label: 'WhatsApp',
-                onTap: () => _openWhatsApp(clip),
-              ),
-              const SizedBox(height: 18),
+              if (clip.hasWhatsApp) ...[
+                _ActionButton(
+                  imagePath: 'assets/icons_clips/whatsapp.png',
+                  label: 'WhatsApp',
+                  onTap: () => _openWhatsApp(clip),
+                ),
+                const SizedBox(height: 18),
+              ],
               _ActionButton(
                 imagePath: isSaved ? '' : 'assets/icons_clips/save.png',
                 icon: isSaved ? Icons.bookmark : null,

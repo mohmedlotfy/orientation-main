@@ -1461,9 +1461,9 @@ Facilities:
     return allProjects.where((p) => p.developerId == developerId).toList();
   }
 
-  // Add a new clip/reel
+  // Add a new clip/reel (adds to the beginning so newest appears first)
   static void addClip(ClipModel clip) {
-    clips.add(clip);
+    clips.insert(0, clip);
   }
 
   // Update project inventory URL

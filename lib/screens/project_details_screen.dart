@@ -12,6 +12,7 @@ import '../models/clip_model.dart';
 import '../models/pdf_file_model.dart';
 import '../services/api/project_api.dart';
 import '../utils/auth_helper.dart';
+import '../widgets/skeleton_loader.dart';
 import '../data/mock_data.dart';
 
 class ProjectDetailsScreen extends StatefulWidget {
