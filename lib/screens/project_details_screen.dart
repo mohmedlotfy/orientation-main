@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:video_player/video_player.dart';
 import 'clips_screen.dart';
 import 'projects_list_screen.dart';
 import 'episode_player_screen.dart';
@@ -30,7 +31,7 @@ class ProjectDetailsScreen extends StatefulWidget {
 }
 
 class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tabController;
   final ProjectApi _projectApi = ProjectApi();
 
@@ -45,10 +46,13 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   bool _isLoading = true;
   bool _isSaved = false;
   bool _isScriptExpanded = false;
+  VideoPlayerController? _adVideoController;
+  bool _isVideoMuted = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _tabController = TabController(
       length: 5, // Project, Episodes, Inventory, Reels, MB
       vsync: this,
@@ -59,8 +63,19 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    // Stop and dispose video before disposing
+    _adVideoController?.pause();
+    _adVideoController?.dispose();
     _tabController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _adVideoController?.pause();
+    }
   }
 
   Future<void> _loadProjectData() async {
@@ -112,6 +127,9 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
         relatedProjects = relatedProjects.take(3).toList();
       }
       
+      // Stop current video before loading new project
+      _adVideoController?.pause();
+      
       setState(() {
         _project = defaultProject;
         // Get episodes for the default project (not just first 3)
@@ -128,6 +146,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
         _isLoading = false;
       });
       _checkIfSaved();
+      _initializeAdVideo();
       return;
     }
 
@@ -182,6 +201,9 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
         relatedProjects = relatedProjects.take(3).toList();
       }
 
+      // Stop current video before loading new project
+      _adVideoController?.pause();
+      
       if (mounted) {
         setState(() {
           _project = project;
@@ -192,6 +214,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
           _isSaved = isSaved;
           _isLoading = false;
         });
+        _initializeAdVideo();
       }
     } catch (e) {
       if (mounted) {
@@ -199,6 +222,97 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
           _isLoading = false;
         });
       }
+    }
+  }
+
+  Future<void> _initializeAdVideo() async {
+    // Stop and dispose previous controller if exists
+    _adVideoController?.pause();
+    await _adVideoController?.dispose();
+    
+    // Use project image URL as video URL, or fallback to sample video
+    final projectImage = _project?.image ?? '';
+    final videoUrl = projectImage.isNotEmpty && !projectImage.contains('assets/')
+        ? projectImage
+        : 'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4';
+    
+    try {
+      _adVideoController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
+      await _adVideoController!.initialize();
+      _adVideoController!.setLooping(true);
+      _adVideoController!.setVolume(_isVideoMuted ? 0.0 : 1.0);
+      _adVideoController!.play();
+      
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      debugPrint('Error initializing video: $e');
+      // If video fails, fallback to image
+      if (mounted) {
+        setState(() {
+          _adVideoController = null;
+        });
+      }
+    }
+  }
+
+  void _toggleVideoMute() {
+    if (_adVideoController != null) {
+      setState(() {
+        _isVideoMuted = !_isVideoMuted;
+        _adVideoController!.setVolume(_isVideoMuted ? 0.0 : 1.0);
+      });
+    }
+  }
+
+  void _openVideoFullscreen() {
+    if (_adVideoController != null && _adVideoController!.value.isInitialized) {
+      // Create a fullscreen dialog with the video
+      showDialog(
+        context: context,
+        barrierColor: Colors.black,
+        builder: (context) => Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: EdgeInsets.zero,
+          child: Stack(
+            children: [
+              // Fullscreen video
+              SizedBox.expand(
+                child: FittedBox(
+                  fit: BoxFit.contain,
+                  child: SizedBox(
+                    width: _adVideoController!.value.size.width,
+                    height: _adVideoController!.value.size.height,
+                    child: VideoPlayer(_adVideoController!),
+                  ),
+                ),
+              ),
+              // Close button
+              Positioned(
+                top: 40,
+                right: 20,
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.5),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.close,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
     }
   }
 
@@ -512,23 +626,37 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
       height: 280,
       child: Stack(
         children: [
-          // Background image
+          // Background video
           Positioned.fill(
-            child: projectImage.isNotEmpty
-                ? (isAsset
-                    ? Image.asset(
-                        projectImage,
+            child: _adVideoController != null && _adVideoController!.value.isInitialized
+                ? GestureDetector(
+                    onTap: _toggleVideoMute, // Tap on video to mute/unmute
+                    child: SizedBox.expand(
+                      child: FittedBox(
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => _buildGradientBackground(),
-                      )
-                    : Image.network(
-                        projectImage,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => _buildGradientBackground(),
-                      ))
-                : _buildGradientBackground(),
+                        child: SizedBox(
+                          width: _adVideoController!.value.size.width,
+                          height: _adVideoController!.value.size.height,
+                          child: VideoPlayer(_adVideoController!),
+                        ),
+                      ),
+                    ),
+                  )
+                : (projectImage.isNotEmpty
+                    ? (isAsset
+                        ? Image.asset(
+                            projectImage,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => _buildGradientBackground(),
+                          )
+                        : Image.network(
+                            projectImage,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => _buildGradientBackground(),
+                          ))
+                    : _buildGradientBackground()),
           ),
-          // Dark overlay gradient
+          // Dark overlay gradient - darker towards bottom to blend with black section
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
@@ -536,14 +664,25 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withOpacity(0.3),
+                    Colors.black.withOpacity(0.2),
                     Colors.black.withOpacity(0.1),
-                    Colors.black.withOpacity(0.5),
-                    Colors.black.withOpacity(0.8),
+                    Colors.black.withOpacity(0.6),
+                    Colors.black.withOpacity(0.9),
+                    Colors.black, // Fully black at bottom to blend with section below
                   ],
-                  stops: const [0.0, 0.3, 0.7, 1.0],
+                  stops: const [0.0, 0.3, 0.6, 0.85, 1.0],
                 ),
               ),
+            ),
+          ),
+          // Red line at bottom - very subtle and thin
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              height: 1,
+              color: brandRed.withOpacity(0.3),
             ),
           ),
           // Status bar area with time and icons
@@ -598,7 +737,33 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
               ),
             ),
           ),
-          // Project title overlay
+          // Mute/Unmute button - bottom right with nice styling
+          if (_adVideoController != null && _adVideoController!.value.isInitialized)
+            Positioned(
+              bottom: 30,
+              right: 16,
+              child: GestureDetector(
+                onTap: _toggleVideoMute,
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.3),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.2),
+                      width: 1,
+                    ),
+                  ),
+                  child: Icon(
+                    _isVideoMuted ? Icons.volume_off : Icons.volume_up,
+                    color: Colors.white.withOpacity(0.9),
+                    size: 18,
+                  ),
+                ),
+              ),
+            ),
+          // Project info overlay (minimal text)
           Positioned(
             top: 70,
             left: 60,
@@ -606,38 +771,6 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        projectTitle,
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.9),
-                          fontSize: 28,
-                          fontWeight: FontWeight.w300,
-                          fontStyle: FontStyle.italic,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Row(
-                        children: [
-                          Icon(Icons.circle, 
-                              color: Colors.white.withOpacity(0.6), size: 6),
-                          const SizedBox(width: 2),
-                          Icon(Icons.wifi, 
-                              color: Colors.white.withOpacity(0.6), size: 12),
-                          Icon(Icons.signal_cellular_alt, 
-                              color: Colors.white.withOpacity(0.6), size: 12),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
                 const SizedBox(height: 2),
                 Text(
                   projectArea.toUpperCase(),
@@ -669,9 +802,8 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
             child: Center(
               child: GestureDetector(
                 onTap: () {
-                  if (_episodes.isNotEmpty) {
-                    _showSnackBar('Playing: ${_episodes.first.title}');
-                  }
+                  // Open video in fullscreen when Continue Watching is clicked
+                  _openVideoFullscreen();
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
@@ -679,7 +811,7 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
                     vertical: 10,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2A2A2A).withOpacity(0.9),
+                    color: const Color(0xFF2A2A2A).withOpacity(0.5),
                     borderRadius: BorderRadius.circular(25),
                   ),
                   child: const Row(
@@ -1086,6 +1218,11 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
           location: project.location.isNotEmpty ? project.location : project.area,
           projectId: project.id,
           onTap: () {
+            // Stop current video before opening new project
+            if (_adVideoController != null && _adVideoController!.value.isInitialized) {
+              _adVideoController!.setVolume(0.0);
+              _adVideoController!.pause();
+            }
             Navigator.push(
               context,
               MaterialPageRoute(

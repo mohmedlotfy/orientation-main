@@ -4,6 +4,7 @@ import '../widgets/auth_header.dart';
 import '../utils/auth_helper.dart';
 import '../services/api/auth_api.dart';
 import '../screens/login_screen.dart';
+import '../screens/onboarding_screen.dart';
 import '../screens/latest_for_us_screen.dart';
 import '../screens/continue_watching_screen.dart';
 import '../screens/top_10_screen.dart';
@@ -11,12 +12,24 @@ import '../screens/projects_list_screen.dart';
 import '../screens/developers_screen.dart';
 import '../screens/areas_screen.dart';
 
-class AppDrawer extends StatelessWidget {
-  const AppDrawer({super.key});
+class AppDrawer extends StatefulWidget {
+  final VoidCallback? onScrollToUpcoming;
+  
+  const AppDrawer({super.key, this.onScrollToUpcoming});
 
+  @override
+  AppDrawerState createState() => AppDrawerState();
+}
+
+class AppDrawerState extends State<AppDrawer> {
   static const Color brandRed = Color(0xFFE50914);
 
-  void _showLogoutDialog(BuildContext context) {
+  void refreshAuthStatus() {
+    setState(() {}); // Refresh the FutureBuilder
+  }
+
+  void _showLogoutDialog() {
+    final context = this.context;
     showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -134,14 +147,17 @@ class AppDrawer extends StatelessWidget {
       if (shouldLogout == true) {
         final authApi = AuthApi();
         await authApi.logout();
-        if (context.mounted) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const LoginScreen(),
-            ),
-            (route) => false,
-          );
+        if (mounted) {
+          setState(() {}); // Refresh the FutureBuilder
+          if (context.mounted) {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const LoginScreen(),
+              ),
+              (route) => false,
+            );
+          }
         }
       }
     });
@@ -260,9 +276,12 @@ class AppDrawer extends StatelessWidget {
                   ),
                   DrawerMenuItem(
                     title: 'Upcoming events',
-                    onTap: () async {
+                    onTap: () {
                       Navigator.pop(context);
-                      await AuthHelper.requireAuth(context);
+                      // Scroll to upcoming projects section (no auth required)
+                      if (widget.onScrollToUpcoming != null) {
+                        widget.onScrollToUpcoming!();
+                      }
                     },
                   ),
                   DrawerMenuItem(
@@ -305,30 +324,51 @@ class AppDrawer extends StatelessWidget {
                 ],
               ),
             ),
-            // Logout button
+            // Logout/Login button
             Padding(
               padding: const EdgeInsets.all(24),
-              child: SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: () => _showLogoutDialog(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: brandRed,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+              child: FutureBuilder<bool>(
+                future: AuthApi().isLoggedIn(),
+                builder: (context, snapshot) {
+                  final isLoggedIn = snapshot.data ?? false;
+                  return SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        if (isLoggedIn) {
+                          _showLogoutDialog();
+                        } else {
+                          Navigator.pop(context); // Close drawer first
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const OnboardingScreen(),
+                            ),
+                          ).then((_) {
+                            // Refresh auth status after returning from login
+                            refreshAuthStatus();
+                          });
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: brandRed,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: Text(
+                        isLoggedIn ? 'Logout' : 'Login',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'Logout',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
+                  );
+                },
               ),
             ),
           ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/api/auth_api.dart';
 import '../screens/login_screen.dart';
+import '../screens/onboarding_screen.dart';
 
 /// Helper class for authentication checks
 class AuthHelper {
@@ -129,12 +130,12 @@ class AuthHelper {
           },
         );
 
-        // If user clicked OK (تسجيل الدخول), navigate to login screen
+        // If user clicked OK (تسجيل الدخول), navigate to onboarding screen first, then login
         if (shouldLogin == true && context.mounted) {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => const LoginScreen(),
+              builder: (context) => const OnboardingScreen(),
             ),
           );
         }

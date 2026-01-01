@@ -18,6 +18,7 @@ import 'projects_list_screen.dart';
 import 'search_screen.dart';
 import 'continue_watching_screen.dart';
 import 'account_screen.dart';
+import 'login_screen.dart';
 
 class HomeFeedScreen extends StatefulWidget {
   const HomeFeedScreen({super.key});
@@ -28,9 +29,12 @@ class HomeFeedScreen extends StatefulWidget {
 
 class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObserver {
   final PageController _featuredController = PageController();
+  final ScrollController _scrollController = ScrollController();
   final HomeApi _homeApi = HomeApi();
   final AuthApi _authApi = AuthApi();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final GlobalKey<AppDrawerState> _drawerKey = GlobalKey<AppDrawerState>();
+  final GlobalKey _upcomingSectionKey = GlobalKey();
   
   int _currentFeaturedPage = 0;
   String _selectedFilter = 'Medical';
@@ -110,19 +114,30 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
   }
 
   Future<void> _loadUserName() async {
-    final userInfo = await _authApi.getStoredUserInfo();
-    if (mounted) {
+    final isLoggedIn = await _authApi.isLoggedIn();
+    if (!mounted) return;
+    
+    if (!isLoggedIn) {
       setState(() {
-        // Use firstName + lastName if available, otherwise fallback to username
-        final firstName = userInfo['firstName'] ?? '';
-        final lastName = userInfo['lastName'] ?? '';
-        if (firstName.isNotEmpty || lastName.isNotEmpty) {
-          _userName = '$firstName $lastName'.trim();
-        } else {
-          _userName = userInfo['username'] ?? 'User';
-        }
+        _userName = 'Guest';
       });
+      return;
     }
+    
+    // User is logged in, load user info
+    final userInfo = await _authApi.getStoredUserInfo();
+    if (!mounted) return;
+    
+    setState(() {
+      // Use firstName + lastName if available, otherwise fallback to username
+      final firstName = userInfo['firstName'] ?? '';
+      final lastName = userInfo['lastName'] ?? '';
+      if (firstName.isNotEmpty || lastName.isNotEmpty) {
+        _userName = '$firstName $lastName'.trim();
+      } else {
+        _userName = userInfo['username'] ?? 'User';
+      }
+    });
   }
 
   // Public method to refresh user name (called from MainScreen)
@@ -173,7 +188,23 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _featuredController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void scrollToUpcomingProjects() {
+    // Scroll to upcoming projects section using the key
+    Future.delayed(const Duration(milliseconds: 100), () {
+      final context = _upcomingSectionKey.currentContext;
+      if (context != null && mounted) {
+        Scrollable.ensureVisible(
+          context,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+          alignment: 0.1, // Scroll to show the section near the top with some padding
+        );
+      }
+    });
   }
 
   @override
@@ -181,8 +212,20 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: Colors.black,
-      drawer: const AppDrawer(),
+      drawer: AppDrawer(
+        key: _drawerKey,
+        onScrollToUpcoming: scrollToUpcomingProjects,
+      ),
+      onDrawerChanged: (isOpened) {
+        if (isOpened) {
+          // Refresh auth status when drawer is opened
+          _drawerKey.currentState?.refreshAuthStatus();
+          // Also refresh user name
+          _loadUserName();
+        }
+      },
       body: CustomScrollView(
+        controller: _scrollController,
         slivers: [
           // Hero section with AppBar, Filters, and Carousel
           SliverToBoxAdapter(
@@ -319,6 +362,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
             ),
           ),
           SliverToBoxAdapter(
+            key: _upcomingSectionKey,
             child: _buildSection(
               'Upcoming Projects',
               onViewAll: () {},
@@ -596,13 +640,24 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
           const SizedBox(width: 12),
           // Profile avatar
           GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const AccountScreen(),
-                ),
-              );
+            onTap: () async {
+              final isLoggedIn = await _authApi.isLoggedIn();
+              if (!isLoggedIn) {
+                // If user is not logged in, show login dialog (same as menu items)
+                await AuthHelper.requireAuth(context);
+                // Refresh user name after returning from login (if user logged in)
+                _loadUserName();
+              } else {
+                // If user is logged in, navigate to account screen
+                if (context.mounted) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AccountScreen(),
+                    ),
+                  );
+                }
+              }
             },
             child: Container(
               width: 36,

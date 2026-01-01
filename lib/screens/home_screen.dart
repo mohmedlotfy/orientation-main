@@ -13,13 +13,20 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final GlobalKey<AppDrawerState> _drawerKey = GlobalKey<AppDrawerState>();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: Colors.black,
-      drawer: const AppDrawer(),
+      drawer: AppDrawer(key: _drawerKey),
+      onDrawerChanged: (isOpened) {
+        if (isOpened) {
+          // Refresh auth status when drawer is opened
+          _drawerKey.currentState?.refreshAuthStatus();
+        }
+      },
       body: SafeArea(
         child: Stack(
           children: [
@@ -64,10 +71,20 @@ class HomeContent extends StatelessWidget {
   }
 }
 
-class AppDrawer extends StatelessWidget {
+class AppDrawer extends StatefulWidget {
   const AppDrawer({super.key});
 
+  @override
+  AppDrawerState createState() => AppDrawerState();
+}
+
+class AppDrawerState extends State<AppDrawer> {
   static const Color brandRed = Color(0xFFE50914);
+  final AuthApi _authApi = AuthApi();
+
+  void refreshAuthStatus() {
+    setState(() {}); // Refresh the FutureBuilder
+  }
 
   void _showLogoutDialog(BuildContext context) {
     showDialog<bool>(
@@ -185,16 +202,18 @@ class AppDrawer extends StatelessWidget {
       },
     ).then((shouldLogout) async {
       if (shouldLogout == true) {
-        final authApi = AuthApi();
-        await authApi.logout();
-        if (context.mounted) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const LoginScreen(),
-            ),
-            (route) => false,
-          );
+        await _authApi.logout();
+        if (mounted) {
+          setState(() {}); // Refresh the FutureBuilder
+          if (context.mounted) {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const LoginScreen(),
+              ),
+              (route) => false,
+            );
+          }
         }
       }
     });
@@ -228,30 +247,50 @@ class AppDrawer extends StatelessWidget {
                 ],
               ),
             ),
-            // Logout button
+            // Logout/Login button
             Padding(
               padding: const EdgeInsets.all(24),
-              child: SizedBox(
-                width: 140,
-                height: 44,
-                child: ElevatedButton(
-                  onPressed: () => _showLogoutDialog(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: brandRed,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25),
+              child: FutureBuilder<bool>(
+                future: _authApi.isLoggedIn(),
+                builder: (context, snapshot) {
+                  final isLoggedIn = snapshot.data ?? false;
+                  return SizedBox(
+                    width: 140,
+                    height: 44,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        if (isLoggedIn) {
+                          _showLogoutDialog(context);
+                        } else {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const LoginScreen(),
+                            ),
+                          ).then((_) {
+                            // Refresh auth status after returning from login
+                            setState(() {});
+                          });
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: brandRed,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(25),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: Text(
+                        isLoggedIn ? 'Logout' : 'Login',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'Logout',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
+                  );
+                },
               ),
             ),
           ],
