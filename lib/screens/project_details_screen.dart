@@ -72,9 +72,30 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Check if screen is active and video needs to be reinitialized
+    final isCurrentRoute = ModalRoute.of(context)?.isCurrent ?? false;
+    if (isCurrentRoute && 
+        _project != null && 
+        (_adVideoController == null || !_adVideoController!.value.isInitialized)) {
+      // Screen is active but video is not initialized, reload it
+      _initializeAdVideo();
+    }
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       _adVideoController?.pause();
+    } else if (state == AppLifecycleState.resumed) {
+      // When app resumes, restart video if it was initialized
+      if (_adVideoController != null && _adVideoController!.value.isInitialized) {
+        _adVideoController!.play();
+      } else if (_project != null) {
+        // Reinitialize video if needed
+        _initializeAdVideo();
+      }
     }
   }
 
@@ -226,53 +247,50 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   }
 
   Future<void> _initializeAdVideo() async {
+    if (_project == null) return;
+    
     // Stop and dispose previous controller if exists
     _adVideoController?.pause();
     await _adVideoController?.dispose();
     
     // Get advertisement video URL from project model
-    // Priority: advertisementVideoUrl > image (if valid video URL) > fallback
-    String? videoUrl = _project?.advertisementVideoUrl;
+    // Priority: advertisementVideoUrl > fallback video
+    String videoUrl = _project!.advertisementVideoUrl;
     
-    // If advertisementVideoUrl is empty, check if image is a video URL
-    if (videoUrl == null || videoUrl.isEmpty) {
-      final projectImage = _project?.image ?? '';
-      if (projectImage.isNotEmpty && 
-          !projectImage.contains('assets/') &&
-          (projectImage.endsWith('.mp4') || 
-           projectImage.endsWith('.mov') || 
-           projectImage.endsWith('.webm') ||
-           projectImage.contains('video'))) {
-        videoUrl = projectImage;
-      }
-    }
-    
-    // Fallback to sample video if no valid URL found
-    videoUrl ??= 'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4';
-    
-    // Only initialize video if we have a valid URL
+    // If advertisementVideoUrl is empty, use fallback video
     if (videoUrl.isEmpty) {
-      if (mounted) {
-        setState(() {
-          _adVideoController = null;
-        });
-      }
-      return;
+      videoUrl = 'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4';
     }
     
     try {
+      debugPrint('Initializing video with URL: $videoUrl');
       _adVideoController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
+      
+      // Add listener to update UI when video is initialized
+      _adVideoController!.addListener(() {
+        if (_adVideoController!.value.isInitialized && mounted) {
+          setState(() {});
+        }
+      });
+      
       await _adVideoController!.initialize();
+      
+      if (!mounted) {
+        await _adVideoController!.dispose();
+        _adVideoController = null;
+        return;
+      }
+      
       _adVideoController!.setLooping(true);
       _adVideoController!.setVolume(_isVideoMuted ? 0.0 : 1.0);
-      _adVideoController!.play();
+      await _adVideoController!.play();
       
-      if (mounted) {
-        setState(() {});
-      }
+      debugPrint('Video initialized and playing: ${_adVideoController!.value.isInitialized}');
+      
+      setState(() {});
     } catch (e) {
       debugPrint('Error initializing advertisement video: $e');
-      // If video fails, fallback to image (don't show video)
+      // If video fails, set controller to null to show image instead
       if (mounted) {
         setState(() {
           _adVideoController = null;
@@ -1241,20 +1259,32 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
           projectName: project.title,
           location: project.location.isNotEmpty ? project.location : project.area,
           projectId: project.id,
-          onTap: () {
-            // Stop current video before opening new project
+          onTap: () async {
+            // Pause current video (but don't dispose) before opening new project
+            // This allows video to resume when returning to this screen
             if (_adVideoController != null && _adVideoController!.value.isInitialized) {
               _adVideoController!.setVolume(0.0);
-              _adVideoController!.pause();
+              await _adVideoController!.pause();
             }
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ProjectDetailsScreen(
-                  projectId: project.id,
+            if (mounted) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProjectDetailsScreen(
+                    projectId: project.id,
+                  ),
                 ),
-              ),
-            );
+              ).then((_) {
+                // When returning from new project, resume video if needed
+                if (mounted && _adVideoController != null && _adVideoController!.value.isInitialized) {
+                  _adVideoController!.setVolume(_isVideoMuted ? 0.0 : 1.0);
+                  _adVideoController!.play();
+                } else if (mounted && _project != null) {
+                  // Reinitialize video if it was disposed
+                  _initializeAdVideo();
+                }
+              });
+            }
           },
         );
       },
