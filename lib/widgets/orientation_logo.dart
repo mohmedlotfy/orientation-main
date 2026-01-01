@@ -5,30 +5,22 @@ class OrientationLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Image.asset(
-      'assets/orientation_logo.png', // ضع اسم الصورة هنا
-      height: 50, // اضبط الحجم حسب الحاجة
-      fit: BoxFit.contain,
-      errorBuilder: (context, error, stackTrace) {
-        // Fallback to text if image not found
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const PlayButtonIcon(),
-            const Text(
-              'rientation',
-              style: TextStyle(
-                color: Color(0xFFE50914),
-                fontSize: 36,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.5,
-                height: 1.0,
-              ),
-            ),
-          ],
-        );
-      },
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        const PlayButtonIcon(),
+        const Text(
+          'rientation',
+          style: TextStyle(
+            color: Color(0xFFE50914),
+            fontSize: 36,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.5,
+            height: 1.0,
+          ),
+        ),
+      ],
     );
   }
 }

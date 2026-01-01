@@ -348,16 +348,9 @@ class DrawerHeader extends StatelessWidget {
       width: double.infinity,
       child: Stack(
         children: [
-          // Background image (replace with your image path)
-          Image.asset(
-            'assets/menu_header.png', // ضع اسم الصورة هنا
-            width: double.infinity,
-            height: 180,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              // Fallback to geometric background if image not found
-              return const GeometricBackground();
-            },
+          // Black background
+          Container(
+            color: Colors.black,
           ),
           // Logo
           const Positioned(
@@ -407,4 +400,3 @@ class DrawerMenuItem extends StatelessWidget {
     );
   }
 }
-
