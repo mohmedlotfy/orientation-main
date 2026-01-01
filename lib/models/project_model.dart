@@ -24,6 +24,7 @@ class ProjectModel {
   final String whatsappNumber;
   final String locationUrl;
   final String inventoryUrl;
+  final String advertisementVideoUrl; // Video URL for advertisement in hero section
 
   ProjectModel({
     required this.id,
@@ -50,6 +51,7 @@ class ProjectModel {
     this.whatsappNumber = '',
     this.locationUrl = '',
     this.inventoryUrl = '',
+    this.advertisementVideoUrl = '',
   });
 
   factory ProjectModel.fromJson(Map<String, dynamic> json) {
@@ -82,6 +84,7 @@ class ProjectModel {
       whatsappNumber: json['whatsappNumber'] ?? '',
       locationUrl: json['locationUrl'] ?? '',
       inventoryUrl: json['inventoryUrl'] ?? '',
+      advertisementVideoUrl: json['advertisementVideoUrl'] ?? json['adVideoUrl'] ?? '',
     );
   }
 
@@ -111,6 +114,7 @@ class ProjectModel {
       'whatsappNumber': whatsappNumber,
       'locationUrl': locationUrl,
       'inventoryUrl': inventoryUrl,
+      'advertisementVideoUrl': advertisementVideoUrl,
     };
   }
 
@@ -139,6 +143,7 @@ class ProjectModel {
     String? whatsappNumber,
     String? locationUrl,
     String? inventoryUrl,
+    String? advertisementVideoUrl,
   }) {
     return ProjectModel(
       id: id ?? this.id,
@@ -165,6 +170,7 @@ class ProjectModel {
       whatsappNumber: whatsappNumber ?? this.whatsappNumber,
       locationUrl: locationUrl ?? this.locationUrl,
       inventoryUrl: inventoryUrl ?? this.inventoryUrl,
+      advertisementVideoUrl: advertisementVideoUrl ?? this.advertisementVideoUrl,
     );
   }
 }

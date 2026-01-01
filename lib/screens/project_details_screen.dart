@@ -230,11 +230,35 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     _adVideoController?.pause();
     await _adVideoController?.dispose();
     
-    // Use project image URL as video URL, or fallback to sample video
-    final projectImage = _project?.image ?? '';
-    final videoUrl = projectImage.isNotEmpty && !projectImage.contains('assets/')
-        ? projectImage
-        : 'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4';
+    // Get advertisement video URL from project model
+    // Priority: advertisementVideoUrl > image (if valid video URL) > fallback
+    String? videoUrl = _project?.advertisementVideoUrl;
+    
+    // If advertisementVideoUrl is empty, check if image is a video URL
+    if (videoUrl == null || videoUrl.isEmpty) {
+      final projectImage = _project?.image ?? '';
+      if (projectImage.isNotEmpty && 
+          !projectImage.contains('assets/') &&
+          (projectImage.endsWith('.mp4') || 
+           projectImage.endsWith('.mov') || 
+           projectImage.endsWith('.webm') ||
+           projectImage.contains('video'))) {
+        videoUrl = projectImage;
+      }
+    }
+    
+    // Fallback to sample video if no valid URL found
+    videoUrl ??= 'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4';
+    
+    // Only initialize video if we have a valid URL
+    if (videoUrl.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _adVideoController = null;
+        });
+      }
+      return;
+    }
     
     try {
       _adVideoController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
@@ -247,8 +271,8 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
         setState(() {});
       }
     } catch (e) {
-      debugPrint('Error initializing video: $e');
-      // If video fails, fallback to image
+      debugPrint('Error initializing advertisement video: $e');
+      // If video fails, fallback to image (don't show video)
       if (mounted) {
         setState(() {
           _adVideoController = null;
