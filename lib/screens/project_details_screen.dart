@@ -308,6 +308,18 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     }
   }
 
+  void _toggleVideoPlayPause() {
+    if (_adVideoController != null && _adVideoController!.value.isInitialized) {
+      setState(() {
+        if (_adVideoController!.value.isPlaying) {
+          _adVideoController!.pause();
+        } else {
+          _adVideoController!.play();
+        }
+      });
+    }
+  }
+
   void _openVideoFullscreen() {
     if (_adVideoController != null && _adVideoController!.value.isInitialized) {
       // Create a fullscreen dialog with the video
@@ -668,12 +680,12 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
       height: 280,
       child: Stack(
         children: [
-          // Background video
+          // Background video with tap detector
           Positioned.fill(
-            child: _adVideoController != null && _adVideoController!.value.isInitialized
-                ? GestureDetector(
-                    onTap: _toggleVideoMute, // Tap on video to mute/unmute
-                    child: SizedBox.expand(
+            child: GestureDetector(
+              onTap: _toggleVideoPlayPause,
+              child: _adVideoController != null && _adVideoController!.value.isInitialized
+                  ? SizedBox.expand(
                       child: FittedBox(
                         fit: BoxFit.cover,
                         child: SizedBox(
@@ -682,37 +694,39 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
                           child: VideoPlayer(_adVideoController!),
                         ),
                       ),
-                    ),
-                  )
-                : (projectImage.isNotEmpty
-                    ? (isAsset
-                        ? Image.asset(
-                            projectImage,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => _buildGradientBackground(),
-                          )
-                        : Image.network(
-                            projectImage,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => _buildGradientBackground(),
-                          ))
-                    : _buildGradientBackground()),
+                    )
+                  : (projectImage.isNotEmpty
+                      ? (isAsset
+                          ? Image.asset(
+                              projectImage,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) => _buildGradientBackground(),
+                            )
+                          : Image.network(
+                              projectImage,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) => _buildGradientBackground(),
+                            ))
+                      : _buildGradientBackground()),
+            ),
           ),
           // Dark overlay gradient - darker towards bottom to blend with black section
           Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.2),
-                    Colors.black.withOpacity(0.1),
-                    Colors.black.withOpacity(0.6),
-                    Colors.black.withOpacity(0.9),
-                    Colors.black, // Fully black at bottom to blend with section below
-                  ],
-                  stops: const [0.0, 0.3, 0.6, 0.85, 1.0],
+            child: IgnorePointer(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withOpacity(0.2),
+                      Colors.black.withOpacity(0.1),
+                      Colors.black.withOpacity(0.6),
+                      Colors.black.withOpacity(0.9),
+                      Colors.black, // Fully black at bottom to blend with section below
+                    ],
+                    stops: const [0.0, 0.3, 0.6, 0.85, 1.0],
+                  ),
                 ),
               ),
             ),
