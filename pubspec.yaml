@@ -45,13 +45,11 @@ flutter:
     - assets/top10/
     - assets/icons_clips/
     - assets/change_inventory/
+    - assets/app_icon/
     - assets/menu_header.png
     - assets/orientation_logo.png
 
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/app_icon_2.png"  # أيقونة التطبيق الدائرية بخلفية سوداء
-  # أو استخدم:
-  # image_path_android: "assets/app_icon_android.png"
-  # image_path_ios: "assets/app_icon_ios.png"
+  image_path: "assets/app_icon/new_icon.png"  # أيقونة التطبيق من مجلد app_icon
