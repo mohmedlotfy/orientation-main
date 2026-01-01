@@ -52,4 +52,4 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/app_icon/new_icon.png"  # أيقونة التطبيق من مجلد app_icon
+  image_path: "assets/app_icon/new_icon_2.png"  # أيقونة التطبيق من مجلد app_icon
