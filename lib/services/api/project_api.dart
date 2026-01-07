@@ -24,23 +24,20 @@ class ProjectApi {
       return MockData.getProjectById(id);
     }
 
-    // TODO: Real API call
-    // final response = await _dioClient.dio.get('/projects/$id');
-    // return ProjectModel.fromJson(response.data);
-    return null;
+    try {
+      final response = await _dioClient.dio.get('/projects/$id');
+      return ProjectModel.fromJson(response.data);
+    } on DioException catch (e) {
+      print('Error getting project: ${e.message}');
+      // Fallback to mock data on error
+      return MockData.getProjectById(id);
+    }
   }
 
   // Get episodes for a project
   Future<List<EpisodeModel>> getEpisodes(String projectId) async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      return MockData.getEpisodesByProjectId(projectId);
-    }
-
-    // TODO: Real API call
-    // final response = await _dioClient.dio.get('/projects/$projectId/episodes');
-    // return (response.data as List).map((e) => EpisodeModel.fromJson(e)).toList();
-    return [];
+    await Future.delayed(const Duration(milliseconds: 300));
+    return MockData.getEpisodesByProjectId(projectId);
   }
 
   // Check if project is saved
@@ -135,75 +132,81 @@ class ProjectApi {
 
   // Get continue watching projects (projects with watch progress > 0)
   Future<List<ProjectModel>> getContinueWatchingProjects() async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      final prefs = await SharedPreferences.getInstance();
-      final allKeys = prefs.getKeys();
-      
-      // Find all project-episode combinations with progress
-      final Map<String, double> projectProgress = {};
-      
-      print('🔍 Searching for watch progress keys...');
-      for (final key in allKeys) {
-        if (key.startsWith('watch_progress_')) {
-          // Format: watch_progress_{projectId}_{episodeId}
-          final withoutPrefix = key.replaceFirst('watch_progress_', '');
-          final lastUnderscoreIndex = withoutPrefix.lastIndexOf('_');
+    // Always use SharedPreferences for continue watching (works with both dev and prod)
+    await Future.delayed(const Duration(milliseconds: 300));
+    final prefs = await SharedPreferences.getInstance();
+    final allKeys = prefs.getKeys();
+    
+    // Find all project-episode combinations with progress
+    final Map<String, double> projectProgress = {};
+    
+    print('🔍 Searching for watch progress keys...');
+    for (final key in allKeys) {
+      if (key.startsWith('watch_progress_')) {
+        // Format: watch_progress_{projectId}_{episodeId}
+        final withoutPrefix = key.replaceFirst('watch_progress_', '');
+        final lastUnderscoreIndex = withoutPrefix.lastIndexOf('_');
+        
+        if (lastUnderscoreIndex > 0 && lastUnderscoreIndex < withoutPrefix.length - 1) {
+          final projectId = withoutPrefix.substring(0, lastUnderscoreIndex);
+          final progress = prefs.getDouble(key) ?? 0.0;
           
-          if (lastUnderscoreIndex > 0 && lastUnderscoreIndex < withoutPrefix.length - 1) {
-            final projectId = withoutPrefix.substring(0, lastUnderscoreIndex);
-            final progress = prefs.getDouble(key) ?? 0.0;
-            
-            print('📊 Found: projectId=$projectId, progress=$progress');
-            
-            // Keep the highest progress for each project
-            // Show projects with progress > 0 and < 0.95 (not fully completed)
-            // This allows showing "almost finished" videos but not 100% completed ones
-            // IMPORTANT: Ignore progress = 1.0 (fully completed) to show in-progress videos
-            if (progress > 0 && progress < 0.95) {
-              if (!projectProgress.containsKey(projectId) || 
-                  projectProgress[projectId]! < progress) {
-                projectProgress[projectId] = progress;
-                print('✅ Updated progress for $projectId: ${(progress * 100).toStringAsFixed(1)}%');
-              }
-            } else if (progress >= 0.95) {
-              print('⏭️ Skipping completed video: $projectId (${(progress * 100).toStringAsFixed(1)}%)');
+          print('📊 Found: projectId=$projectId, progress=$progress');
+          
+          // Keep the highest progress for each project
+          // Show projects with progress > 0 and < 0.95 (not fully completed)
+          // This allows showing "almost finished" videos but not 100% completed ones
+          // IMPORTANT: Ignore progress = 1.0 (fully completed) to show in-progress videos
+          if (progress > 0 && progress < 0.95) {
+            if (!projectProgress.containsKey(projectId) || 
+                projectProgress[projectId]! < progress) {
+              projectProgress[projectId] = progress;
+              print('✅ Updated progress for $projectId: ${(progress * 100).toStringAsFixed(1)}%');
             }
+          } else if (progress >= 0.95) {
+            print('⏭️ Skipping completed video: $projectId (${(progress * 100).toStringAsFixed(1)}%)');
           }
         }
       }
-      
-      print('📋 Found ${projectProgress.length} projects with progress');
-      
-      // Get projects with progress > 0
-      final continueWatchingProjects = <ProjectModel>[];
-      for (final entry in projectProgress.entries) {
-        final project = MockData.getProjectById(entry.key);
-        if (project != null) {
-          continueWatchingProjects.add(
-            project.copyWith(watchProgress: entry.value),
-          );
-          print('✅ Added project: ${project.title} (${entry.value * 100}%)');
-        } else {
-          print('❌ Project not found: ${entry.key}');
+    }
+    
+    print('📋 Found ${projectProgress.length} projects with progress');
+    
+    // Get projects with progress > 0
+    final continueWatchingProjects = <ProjectModel>[];
+    for (final entry in projectProgress.entries) {
+      // Try to get project from API first, then fallback to mock data
+      ProjectModel? project;
+      if (!_devMode) {
+        try {
+          project = await getProjectById(entry.key);
+        } catch (e) {
+          print('⚠️ Could not fetch project ${entry.key} from API: $e');
         }
       }
       
-      // Sort by progress (descending) - most watched first
-      continueWatchingProjects.sort((a, b) {
-        final aProgress = a.watchProgress ?? 0.0;
-        final bProgress = b.watchProgress ?? 0.0;
-        return bProgress.compareTo(aProgress);
-      });
+      // Fallback to mock data if API call failed or in dev mode
+      project ??= MockData.getProjectById(entry.key);
       
-      print('🎬 Returning ${continueWatchingProjects.length} continue watching projects');
-      return continueWatchingProjects;
+      if (project != null) {
+        continueWatchingProjects.add(
+          project.copyWith(watchProgress: entry.value),
+        );
+        print('✅ Added project: ${project.title} (${(entry.value * 100).toStringAsFixed(1)}%)');
+      } else {
+        print('❌ Project not found: ${entry.key}');
+      }
     }
-
-    // TODO: Real API call
-    // final response = await _dioClient.dio.get('/projects/continue-watching');
-    // return (response.data as List).map((e) => ProjectModel.fromJson(e)).toList();
-    return [];
+    
+    // Sort by progress (descending) - most watched first
+    continueWatchingProjects.sort((a, b) {
+      final aProgress = a.watchProgress ?? 0.0;
+      final bProgress = b.watchProgress ?? 0.0;
+      return bProgress.compareTo(aProgress);
+    });
+    
+    print('🎬 Returning ${continueWatchingProjects.length} continue watching projects');
+    return continueWatchingProjects;
   }
 
   // Get clips for a project
@@ -354,10 +357,18 @@ class ProjectApi {
       return MockData.getProjectsByDeveloperId(developerId);
     }
 
-    // TODO: Real API call
-    // final response = await _dioClient.dio.get('/developers/$developerId/projects');
-    // return (response.data as List).map((e) => ProjectModel.fromJson(e)).toList();
-    return [];
+    try {
+      final response = await _dioClient.dio.get('/projects', queryParameters: {
+        'developerId': developerId,
+      });
+      return (response.data as List)
+          .map((e) => ProjectModel.fromJson(e))
+          .toList();
+    } on DioException catch (e) {
+      print('Error getting developer projects: ${e.message}');
+      // Fallback to mock data on error
+      return MockData.getProjectsByDeveloperId(developerId);
+    }
   }
 
   // Update project inventory URL

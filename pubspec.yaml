@@ -46,6 +46,7 @@ flutter:
     - assets/icons_clips/
     - assets/change_inventory/
     - assets/app_icon/
+    - assets/videos/
     - assets/menu_header.png
     - assets/orientation_logo.png
 

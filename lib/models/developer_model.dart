@@ -20,12 +20,21 @@ class DeveloperModel {
   });
 
   factory DeveloperModel.fromJson(Map<String, dynamic> json) {
+    // Handle projects array to get count
+    int projectsCount = 0;
+    if (json['projects'] != null) {
+      if (json['projects'] is List) {
+        projectsCount = (json['projects'] as List).length;
+      }
+    }
+    projectsCount = json['projectsCount'] ?? projectsCount;
+    
     return DeveloperModel(
-      id: json['_id'] ?? json['id'] ?? '',
+      id: json['_id']?.toString() ?? json['id']?.toString() ?? '',
       name: json['name'] ?? '',
       logo: json['logo'] ?? '',
       isAsset: json['isAsset'] ?? false,
-      projectsCount: json['projectsCount'] ?? 0,
+      projectsCount: projectsCount,
       description: json['description'] ?? '',
       areas: json['areas'] != null ? List<String>.from(json['areas']) : [],
       createdAt: json['createdAt'] != null

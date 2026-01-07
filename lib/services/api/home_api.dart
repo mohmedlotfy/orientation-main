@@ -25,12 +25,17 @@ class HomeApi {
     }
 
     try {
-      final response = await _dioClient.dio.get('/projects/featured');
+      // Get trending projects as featured
+      final response = await _dioClient.dio.get('/projects/trending', queryParameters: {
+        'limit': 10,
+      });
       return (response.data as List)
           .map((json) => ProjectModel.fromJson(json))
           .toList();
     } on DioException catch (e) {
-      throw _handleError(e);
+      print('Error getting featured projects: ${e.message}');
+      // Fallback to mock data on error
+      return MockData.featuredProjects;
     }
   }
 
@@ -42,30 +47,80 @@ class HomeApi {
     }
 
     try {
-      final response = await _dioClient.dio.get('/projects/latest');
+      // Get projects sorted by newest
+      final response = await _dioClient.dio.get('/projects', queryParameters: {
+        'sortBy': 'newest',
+        'limit': 10,
+      });
       return (response.data as List)
           .map((json) => ProjectModel.fromJson(json))
           .toList();
     } on DioException catch (e) {
-      throw _handleError(e);
+      print('Error getting latest projects: ${e.message}');
+      // Fallback to mock data on error
+      return MockData.latestProjects;
     }
   }
 
   /// Get continue watching projects
   Future<List<ProjectModel>> getContinueWatching() async {
+    print('🔍 getContinueWatching() called. _devMode = $_devMode');
+    
+    // Always use ProjectApi method (uses SharedPreferences) since /projects/continue-watching endpoint doesn't exist
+    // TODO: Implement /projects/continue-watching endpoint in backend, then uncomment API call below
+    print('📱 Using getContinueWatchingProjects() (SharedPreferences)...');
+    try {
+      final result = await _projectApi.getContinueWatchingProjects();
+      print('✅ getContinueWatchingProjects() returned ${result.length} projects');
+      return result;
+    } catch (e) {
+      print('❌ Error in getContinueWatchingProjects: $e');
+      // Return empty list instead of throwing exception
+      return [];
+    }
+    
+    /* 
+    // Uncomment when backend endpoint is ready
     if (_devMode) {
       // Use ProjectApi to get dynamic continue watching projects
-      return await _projectApi.getContinueWatchingProjects();
+      print('📱 Using dev mode, calling getContinueWatchingProjects()...');
+      final result = await _projectApi.getContinueWatchingProjects();
+      print('✅ getContinueWatchingProjects() returned ${result.length} projects');
+      return result;
     }
 
     try {
-      final response = await _dioClient.dio.get('/projects/continue-watching');
-      return (response.data as List)
+      print('🌐 Calling API: /projects/continue-watching');
+      final response = await _dioClient.dio.get(
+        '/projects/continue-watching',
+        options: Options(
+          receiveTimeout: const Duration(seconds: 5), // 5 second timeout
+        ),
+      );
+      final projects = (response.data as List)
           .map((json) => ProjectModel.fromJson(json))
           .toList();
+      print('✅ API returned ${projects.length} projects');
+      return projects;
     } on DioException catch (e) {
-      throw _handleError(e);
+      print('❌ Error getting continue watching from API: ${e.message}');
+      print('🔄 Falling back to getContinueWatchingProjects()...');
+      // Fallback to ProjectApi method (uses SharedPreferences)
+      try {
+        final result = await _projectApi.getContinueWatchingProjects();
+        print('✅ Fallback returned ${result.length} projects');
+        return result;
+      } catch (fallbackError) {
+        print('❌ Error in fallback getContinueWatchingProjects: $fallbackError');
+        // Return empty list instead of throwing exception
+        return [];
+      }
+    } catch (e) {
+      print('❌ Unexpected error getting continue watching: $e');
+      // Return empty list instead of throwing exception
+      return [];
     }
+    */
   }
 
   /// Get top 10 projects
@@ -76,12 +131,17 @@ class HomeApi {
     }
 
     try {
-      final response = await _dioClient.dio.get('/projects/top10');
+      // Get trending projects (top 10)
+      final response = await _dioClient.dio.get('/projects/trending', queryParameters: {
+        'limit': 10,
+      });
       return (response.data as List)
           .map((json) => ProjectModel.fromJson(json))
           .toList();
     } on DioException catch (e) {
-      throw _handleError(e);
+      print('Error getting top 10 projects: ${e.message}');
+      // Fallback to mock data on error
+      return MockData.top10Projects;
     }
   }
 
@@ -93,12 +153,18 @@ class HomeApi {
     }
 
     try {
-      final response = await _dioClient.dio.get('/projects/area/$area');
+      // Get projects filtered by location
+      final response = await _dioClient.dio.get('/projects', queryParameters: {
+        'location': area,
+        'limit': 10,
+      });
       return (response.data as List)
           .map((json) => ProjectModel.fromJson(json))
           .toList();
     } on DioException catch (e) {
-      throw _handleError(e);
+      print('Error getting projects by area: ${e.message}');
+      // Fallback to mock data on error
+      return MockData.getProjectsByArea(area);
     }
   }
 
@@ -110,12 +176,19 @@ class HomeApi {
     }
 
     try {
-      final response = await _dioClient.dio.get('/projects/upcoming');
-      return (response.data as List)
+      // Get projects with status PLANNING or CONSTRUCTION
+      final response = await _dioClient.dio.get('/projects', queryParameters: {
+        'status': 'PLANNING',
+        'limit': 10,
+      });
+      final projects = (response.data as List)
           .map((json) => ProjectModel.fromJson(json))
           .toList();
+      return projects;
     } on DioException catch (e) {
-      throw _handleError(e);
+      print('Error getting upcoming projects: ${e.message}');
+      // Fallback to mock data on error
+      return MockData.upcomingProjects;
     }
   }
 
@@ -144,12 +217,14 @@ class HomeApi {
     }
 
     try {
-      final response = await _dioClient.dio.get('/developers');
+      final response = await _dioClient.dio.get('/developer');
       return (response.data as List)
           .map((json) => DeveloperModel.fromJson(json))
           .toList();
     } on DioException catch (e) {
-      throw _handleError(e);
+      print('Error getting developers: ${e.message}');
+      // Fallback to mock data on error
+      return MockData.developers;
     }
   }
 

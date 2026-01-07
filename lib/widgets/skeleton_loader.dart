@@ -216,6 +216,7 @@ class SkeletonProjectCard extends StatelessWidget {
         margin: const EdgeInsets.only(right: 16),
         width: 280,
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SkeletonBox(
@@ -260,23 +261,24 @@ class SkeletonProjectCard extends StatelessWidget {
       margin: const EdgeInsets.only(right: 12),
       width: 160,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SkeletonBox(
             width: double.infinity,
-            height: 120,
+            height: 80,
             borderRadius: 12,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           const SkeletonBox(
             width: 120,
-            height: 16,
+            height: 12,
             borderRadius: 4,
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           const SkeletonBox(
             width: 80,
-            height: 14,
+            height: 9,
             borderRadius: 4,
           ),
         ],

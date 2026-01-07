@@ -24,14 +24,34 @@ class EpisodeModel {
   });
 
   factory EpisodeModel.fromJson(Map<String, dynamic> json) {
+    // Handle projectId as ObjectId or string
+    String projectId = '';
+    if (json['projectId'] != null) {
+      if (json['projectId'] is Map) {
+        projectId = json['projectId']['_id']?.toString() ?? json['projectId']['id']?.toString() ?? '';
+      } else {
+        projectId = json['projectId'].toString();
+      }
+    }
+    
+    // Parse episodeOrder to episodeNumber
+    int episodeNumber = 1;
+    if (json['episodeOrder'] != null) {
+      final orderStr = json['episodeOrder'].toString();
+      final orderMatch = RegExp(r'\d+').firstMatch(orderStr);
+      if (orderMatch != null) {
+        episodeNumber = int.tryParse(orderMatch.group(0) ?? '1') ?? 1;
+      }
+    }
+    
     return EpisodeModel(
-      id: json['_id'] ?? json['id'] ?? '',
-      projectId: json['projectId'] ?? '',
+      id: json['_id']?.toString() ?? json['id']?.toString() ?? '',
+      projectId: projectId,
       title: json['title'] ?? '',
-      episodeNumber: json['episodeNumber'] ?? 1,
+      episodeNumber: json['episodeNumber'] ?? episodeNumber,
       thumbnail: json['thumbnail'] ?? '',
       isAsset: json['isAsset'] ?? false,
-      videoUrl: json['videoUrl'] ?? '',
+      videoUrl: json['episodeUrl'] ?? json['videoUrl'] ?? '',
       duration: json['duration'] ?? '',
       description: json['description'] ?? '',
       createdAt: json['createdAt'] != null

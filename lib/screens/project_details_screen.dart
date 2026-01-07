@@ -47,7 +47,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   bool _isSaved = false;
   bool _isScriptExpanded = false;
   VideoPlayerController? _adVideoController;
-  bool _isVideoMuted = false;
+  bool _isVideoMuted = true; // Start muted by default
 
   @override
   void initState() {
@@ -253,18 +253,40 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     _adVideoController?.pause();
     await _adVideoController?.dispose();
     
+    // Backend determines if project has video or image
+    // If hasVideo is false or null, show image instead
+    if (_project!.hasVideo == false) {
+      if (mounted) {
+        setState(() {
+          _adVideoController = null;
+        });
+      }
+      return;
+    }
+    
     // Get advertisement video URL from project model
-    // Priority: advertisementVideoUrl > fallback video
     String videoUrl = _project!.advertisementVideoUrl;
     
-    // If advertisementVideoUrl is empty, use fallback video
+    // If advertisementVideoUrl is empty, don't load video - show image instead
     if (videoUrl.isEmpty) {
-      videoUrl = 'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4';
+      if (mounted) {
+        setState(() {
+          _adVideoController = null;
+        });
+      }
+      return;
     }
     
     try {
       debugPrint('Initializing video with URL: $videoUrl');
-      _adVideoController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
+      
+      // Check if it's a network URL or asset path
+      if (videoUrl.startsWith('http') || videoUrl.startsWith('https')) {
+        _adVideoController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
+      } else {
+        // Asset video
+        _adVideoController = VideoPlayerController.asset(videoUrl);
+      }
       
       // Add listener to update UI when video is initialized
       _adVideoController!.addListener(() {
@@ -848,49 +870,6 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
                   ),
                 ),
               ],
-            ),
-          ),
-          // Continue Watching button
-          Positioned(
-            bottom: 20,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: GestureDetector(
-                onTap: () {
-                  // Open video in fullscreen when Continue Watching is clicked
-                  _openVideoFullscreen();
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF2A2A2A).withOpacity(0.5),
-                    borderRadius: BorderRadius.circular(25),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.play_arrow,
-                        color: Colors.white,
-                        size: 18,
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Continue Watching',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             ),
           ),
         ],

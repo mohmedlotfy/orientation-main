@@ -25,6 +25,8 @@ class ProjectModel {
   final String locationUrl;
   final String inventoryUrl;
   final String advertisementVideoUrl; // Video URL for advertisement in hero section
+  final String? logo; // Logo URL for the project
+  final bool? hasVideo; // Backend determines if project has video (true) or image (false)
 
   ProjectModel({
     required this.id,
@@ -52,29 +54,63 @@ class ProjectModel {
     this.locationUrl = '',
     this.inventoryUrl = '',
     this.advertisementVideoUrl = '',
+    this.logo,
+    this.hasVideo,
   });
 
   factory ProjectModel.fromJson(Map<String, dynamic> json) {
+    // Handle developer as ObjectId or populated object
+    String developerId = '';
+    String developerName = '';
+    if (json['developer'] != null) {
+      if (json['developer'] is Map) {
+        developerId = json['developer']['_id']?.toString() ?? json['developer']['id']?.toString() ?? '';
+        developerName = json['developer']['name'] ?? '';
+      } else {
+        developerId = json['developer'].toString();
+      }
+    }
+    
+    // Map status to category
+    String category = 'Residential';
+    if (json['status'] != null) {
+      final status = json['status'].toString().toUpperCase();
+      if (status == 'PLANNING' || status == 'CONSTRUCTION') {
+        category = 'Upcoming';
+      } else if (status == 'COMPLETED' || status == 'DELIVERED') {
+        category = 'Residential';
+      }
+    }
+    
+    // Determine if has video based on heroVideoUrl
+    bool? hasVideo;
+    final heroVideoUrl = json['heroVideoUrl'] ?? json['advertisementVideoUrl'] ?? '';
+    if (heroVideoUrl.isNotEmpty) {
+      hasVideo = true;
+    } else {
+      hasVideo = json['hasVideo'];
+    }
+    
     return ProjectModel(
-      id: json['_id'] ?? json['id'] ?? '',
+      id: json['_id']?.toString() ?? json['id']?.toString() ?? '',
       title: json['title'] ?? '',
       subtitle: json['subtitle'] ?? '',
       label: json['label'],
-      image: json['image'] ?? '',
+      image: json['image'] ?? json['heroVideoUrl'] ?? '', // Use heroVideoUrl as image fallback
       isAsset: json['isAsset'] ?? false,
       gradientColors: json['gradientColors'] != null
           ? List<String>.from(json['gradientColors'])
           : ['0xFF1a4a4a', '0xFF0d2525'],
       location: json['location'] ?? '',
-      area: json['area'] ?? '',
-      developerName: json['developerName'] ?? '',
-      developerId: json['developerId'] ?? '',
-      category: json['category'] ?? 'Residential',
+      area: json['area'] ?? json['location'] ?? '',
+      developerName: json['developerName'] ?? developerName,
+      developerId: json['developerId'] ?? developerId,
+      category: json['category'] ?? category,
       description: json['description'] ?? '',
       watchProgress: json['watchProgress']?.toDouble(),
       rank: json['rank'],
       isFeatured: json['isFeatured'] ?? false,
-      isUpcoming: json['isUpcoming'] ?? false,
+      isUpcoming: json['isUpcoming'] ?? (category == 'Upcoming'),
       isSaved: json['isSaved'] ?? false,
       tags: json['tags'] != null ? List<String>.from(json['tags']) : [],
       createdAt: json['createdAt'] != null
@@ -84,7 +120,9 @@ class ProjectModel {
       whatsappNumber: json['whatsappNumber'] ?? '',
       locationUrl: json['locationUrl'] ?? '',
       inventoryUrl: json['inventoryUrl'] ?? '',
-      advertisementVideoUrl: json['advertisementVideoUrl'] ?? json['adVideoUrl'] ?? '',
+      advertisementVideoUrl: heroVideoUrl,
+      logo: json['logo'] ?? json['logoUrl'],
+      hasVideo: hasVideo,
     );
   }
 
@@ -115,6 +153,8 @@ class ProjectModel {
       'locationUrl': locationUrl,
       'inventoryUrl': inventoryUrl,
       'advertisementVideoUrl': advertisementVideoUrl,
+      'logo': logo,
+      'hasVideo': hasVideo,
     };
   }
 
@@ -144,6 +184,8 @@ class ProjectModel {
     String? locationUrl,
     String? inventoryUrl,
     String? advertisementVideoUrl,
+    String? logo,
+    bool? hasVideo,
   }) {
     return ProjectModel(
       id: id ?? this.id,
@@ -171,6 +213,8 @@ class ProjectModel {
       locationUrl: locationUrl ?? this.locationUrl,
       inventoryUrl: inventoryUrl ?? this.inventoryUrl,
       advertisementVideoUrl: advertisementVideoUrl ?? this.advertisementVideoUrl,
+      logo: logo ?? this.logo,
+      hasVideo: hasVideo ?? this.hasVideo,
     );
   }
 }

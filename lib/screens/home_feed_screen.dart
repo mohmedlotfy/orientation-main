@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
+import 'package:chewie/chewie.dart';
 import '../widgets/project_card.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/skeleton_loader.dart';
@@ -44,6 +46,12 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
 
   final List<String> _filters = ['Medical', 'Commercial', 'Residential', 'Hotel'];
 
+  // Video player for featured section
+  VideoPlayerController? _videoPlayerController;
+  ChewieController? _chewieController;
+  bool _isVideoInitialized = false;
+  ProjectModel? _videoProject; // Project that contains the video
+
   static const Color brandRed = Color(0xFFE50914);
 
   // Data from API
@@ -64,6 +72,87 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
     WidgetsBinding.instance.addObserver(this);
     _loadData();
     _loadUserName();
+    // Video will be initialized after loading data (in _loadData)
+  }
+
+  Future<void> _initializeVideo() async {
+    try {
+      // Use asset video only (no API video in dev mode)
+      String videoUrl = 'assets/videos/orientation.v2.mp4';
+      bool isNetworkVideo = false;
+      
+      // Set video project to first featured project
+      if (_featuredProjects.isNotEmpty) {
+        _videoProject = _featuredProjects.first;
+      }
+
+      // Initialize video controller based on source
+      if (isNetworkVideo) {
+        _videoPlayerController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
+      } else {
+        _videoPlayerController = VideoPlayerController.asset(videoUrl);
+      }
+
+      await _videoPlayerController!.initialize();
+      
+      if (!mounted) {
+        _videoPlayerController?.dispose();
+        return;
+      }
+      
+      // Mute the video
+      await _videoPlayerController!.setVolume(0.0);
+      
+      // Calculate aspect ratio to match the container (65% of screen height)
+      final screenWidth = MediaQuery.of(context).size.width;
+      final containerHeight = MediaQuery.of(context).size.height * 0.65;
+      final targetAspectRatio = screenWidth / containerHeight;
+      
+      _chewieController = ChewieController(
+        videoPlayerController: _videoPlayerController!,
+        autoPlay: true,
+        looping: false, // Disable looping to detect when video ends
+        aspectRatio: targetAspectRatio,
+        showControls: false,
+        allowFullScreen: false,
+        allowMuting: true,
+        allowPlaybackSpeedChanging: false,
+        errorBuilder: (context, errorMessage) {
+          return Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  const Color(0xFF4A90A4).withOpacity(0.3),
+                  const Color(0xFF2d6a7a).withOpacity(0.2),
+                  Colors.transparent,
+                ],
+                stops: const [0.0, 0.3, 0.5],
+              ),
+            ),
+          );
+        },
+      );
+
+      await _videoPlayerController!.play();
+
+      // Listen for video completion to auto-scroll to next project
+      _videoPlayerController!.addListener(_videoListener);
+
+      if (mounted) {
+        setState(() {
+          _isVideoInitialized = true;
+        });
+      }
+    } catch (e) {
+      // Silently fail - video is optional (mock data)
+      if (mounted) {
+        setState(() {
+          _isVideoInitialized = false;
+        });
+      }
+    }
   }
 
   @override
@@ -146,20 +235,59 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
   }
 
   Future<void> _loadData() async {
+    print('🔄 Starting _loadData()...');
     try {
+      // Load data with error handling for each API call
+      print('📡 Calling APIs...');
       final results = await Future.wait([
-        _homeApi.getFeaturedProjects(),
-        _homeApi.getLatestProjects(),
-        _homeApi.getContinueWatching(),
-        _homeApi.getTop10Projects(),
-        _homeApi.getProjectsByArea('North Coast'),
-        _homeApi.getProjectsByArea('Dubai'),
-        _homeApi.getProjectsByArea('Oman'),
-        _homeApi.getUpcomingProjects(),
-        _homeApi.getDevelopers(),
-        _homeApi.getAreas(),
+        _homeApi.getFeaturedProjects().catchError((e) {
+          print('Error loading featured projects: $e');
+          return <ProjectModel>[];
+        }),
+        _homeApi.getLatestProjects().catchError((e) {
+          print('Error loading latest projects: $e');
+          return <ProjectModel>[];
+        }),
+        _homeApi.getContinueWatching().catchError((e) {
+          print('Error loading continue watching: $e');
+          return <ProjectModel>[];
+        }),
+        _homeApi.getTop10Projects().catchError((e) {
+          print('Error loading top 10 projects: $e');
+          return <ProjectModel>[];
+        }),
+        _homeApi.getProjectsByArea('North Coast').catchError((e) {
+          print('Error loading North Coast projects: $e');
+          return <ProjectModel>[];
+        }),
+        _homeApi.getProjectsByArea('Dubai').catchError((e) {
+          print('Error loading Dubai projects: $e');
+          return <ProjectModel>[];
+        }),
+        _homeApi.getProjectsByArea('Oman').catchError((e) {
+          print('Error loading Oman projects: $e');
+          return <ProjectModel>[];
+        }),
+        _homeApi.getUpcomingProjects().catchError((e) {
+          print('Error loading upcoming projects: $e');
+          return <ProjectModel>[];
+        }),
+        _homeApi.getDevelopers().catchError((e) {
+          print('Error loading developers: $e');
+          return <DeveloperModel>[];
+        }),
+        _homeApi.getAreas().catchError((e) {
+          print('Error loading areas: $e');
+          return <AreaModel>[];
+        }),
       ]);
 
+      print('✅ All APIs completed. Results:');
+      print('  - Featured: ${(results[0] as List).length}');
+      print('  - Latest: ${(results[1] as List).length}');
+      print('  - Continue Watching: ${(results[2] as List).length}');
+      print('  - Top 10: ${(results[3] as List).length}');
+      
       if (mounted) {
         setState(() {
           _featuredProjects = results[0] as List<ProjectModel>;
@@ -174,12 +302,43 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
           _areas = results[9] as List<AreaModel>;
           _isLoading = false;
         });
+        print('✅ setState completed. _isLoading = false, _continueWatching.length = ${_continueWatching.length}');
+        // Initialize video after loading projects (to get video from API)
+        _initializeVideo();
       }
     } catch (e) {
+      print('❌ Unexpected error in _loadData: $e');
+      print('❌ Stack trace: ${StackTrace.current}');
       if (mounted) {
         setState(() {
           _isLoading = false;
         });
+        print('✅ setState in catch block. _isLoading = false');
+      }
+    }
+  }
+
+  void _videoListener() {
+    if (_videoPlayerController != null &&
+        _videoPlayerController!.value.isInitialized &&
+        _videoPlayerController!.value.duration.inMilliseconds > 0) {
+      final position = _videoPlayerController!.value.position;
+      final duration = _videoPlayerController!.value.duration;
+      
+      // Check if video has ended (position is at or very close to duration)
+      // Use a small threshold (100ms) to account for timing precision
+      if (position.inMilliseconds >= (duration.inMilliseconds - 100)) {
+        // Video ended, move to next project only if we're on the first page (with video)
+        if (_currentFeaturedPage == 0 && 
+            _featuredProjects.length > 1 && 
+            mounted) {
+          final nextIndex = (_currentFeaturedPage + 1) % _featuredProjects.length;
+          _featuredController.animateToPage(
+            nextIndex,
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeInOut,
+          );
+        }
       }
     }
   }
@@ -187,8 +346,11 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _videoPlayerController?.removeListener(_videoListener);
     _featuredController.dispose();
     _scrollController.dispose();
+    _chewieController?.dispose();
+    _videoPlayerController?.dispose();
     super.dispose();
   }
 
@@ -414,7 +576,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
   // Hero section with overlaying AppBar and Filters on Carousel
   Widget _buildHeroSection() {
     return SizedBox(
-      height: 400,
+      height: MediaQuery.of(context).size.height * 0.65, // 65% of screen height
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -425,11 +587,22 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
               setState(() {
                 _currentFeaturedPage = index;
               });
+              // Restart video when moving to first page (index 0)
+              if (_videoPlayerController != null && 
+                  _videoPlayerController!.value.isInitialized && 
+                  mounted) {
+                if (index == 0) {
+                  _videoPlayerController!.seekTo(Duration.zero);
+                  _videoPlayerController!.play().catchError((_) {});
+                } else {
+                  _videoPlayerController!.pause();
+                }
+              }
             },
             itemCount: _featuredProjects.length,
             itemBuilder: (context, index) {
               final project = _featuredProjects[index];
-              return _buildFeaturedCard(project);
+              return _buildFeaturedCard(context, project, index);
             },
           ),
           // AppBar overlay
@@ -442,14 +615,30 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
               child: _buildAppBar(),
             ),
           ),
-          // Filter chips overlay
+          // Logo above Watch button (static until API is connected)
           Positioned(
-            top: 80,
+            bottom: 90,
             left: 0,
             right: 0,
-            child: SafeArea(
-              bottom: false,
-              child: _buildFilterChips(),
+            child: Center(
+              child: Image.asset(
+                'assets/images/logo.png/masaya_logo.png',
+                height: 100,
+                width: 200,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  // Try alternative path
+                  return Image.asset(
+                    'assets/images/masaya_logo.png',
+                    height: 100,
+                    width: 200,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const SizedBox.shrink();
+                    },
+                  );
+                },
+              ),
             ),
           ),
           // Watch button at bottom
@@ -466,21 +655,68 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
     );
   }
 
+  Widget _buildProjectLogo(ProjectModel project) {
+    // Use logo from API if available, otherwise show nothing
+    if (project.logo == null || project.logo!.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return project.logo!.startsWith('http') || project.logo!.startsWith('https')
+        ? Image.network(
+            project.logo!,
+            height: 100,
+            width: 200,
+            fit: BoxFit.contain,
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return SizedBox(
+                width: 200,
+                height: 100,
+                child: Center(
+                  child: CircularProgressIndicator(
+                    value: loadingProgress.expectedTotalBytes != null
+                        ? loadingProgress.cumulativeBytesLoaded /
+                            loadingProgress.expectedTotalBytes!
+                        : null,
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                ),
+              );
+            },
+            errorBuilder: (context, error, stackTrace) {
+              return const SizedBox.shrink();
+            },
+          )
+        : Image.asset(
+            project.logo!,
+            height: 100,
+            width: 200,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              return const SizedBox.shrink();
+            },
+          );
+  }
+
   Widget _buildWatchButton() {
-    final currentProject = _featuredProjects.isNotEmpty 
-        ? _featuredProjects[_currentFeaturedPage] 
-        : null;
+    // Use video project if available, otherwise use current page project
+    final projectToOpen = _videoProject ?? 
+        (_featuredProjects.isNotEmpty ? _featuredProjects[_currentFeaturedPage] : null);
+    
     return GestureDetector(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ProjectDetailsScreen(
-              projectId: currentProject?.id,
-              initialTabIndex: 1, // Open on Episodes tab
+        if (projectToOpen != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ProjectDetailsScreen(
+                projectId: projectToOpen.id,
+                initialTabIndex: 1, // Open on Episodes tab
+              ),
             ),
-          ),
-        );
+          );
+        }
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
@@ -515,67 +751,87 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
     );
   }
 
-  Widget _buildFeaturedCard(ProjectModel project) {
+  Widget _buildFeaturedCard(BuildContext context, ProjectModel project, int index) {
     final gradientColors = project.gradientColors.map((c) {
       final hex = c.replaceAll('0x', '');
       return Color(int.parse(hex, radix: 16));
     }).toList();
     final bool isAsset = project.isAsset;
+    
+    // Use video for first card (index 0), image for others
+    final bool useVideo = index == 0 && 
+        _isVideoInitialized && 
+        _chewieController != null && 
+        _videoPlayerController != null &&
+        _videoPlayerController!.value.isInitialized;
+    
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Background image
-        isAsset
-            ? Image.asset(
-                project.image,
-                fit: BoxFit.cover,
-                alignment: Alignment.center,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: gradientColors,
-                      ),
-                    ),
-                  );
-                },
+        // Background video (for first card) or image
+        useVideo
+            ? Positioned.fill(
+                child: FittedBox(
+                  fit: BoxFit.fill,
+                  alignment: Alignment.topCenter,
+                  child: SizedBox(
+                    width: MediaQuery.of(context).size.width,
+                    height: MediaQuery.of(context).size.height * 0.65,
+                    child: VideoPlayer(_videoPlayerController!),
+                  ),
+                ),
               )
-            : Image.network(
-                project.image,
-                fit: BoxFit.cover,
-                alignment: Alignment.center,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: gradientColors,
-                      ),
-                    ),
-                    child: const Center(
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    ),
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: gradientColors,
-                      ),
-                    ),
-                  );
-                },
-              ),
+            : (isAsset
+                ? Image.asset(
+                    project.image,
+                    fit: BoxFit.cover,
+                    alignment: Alignment.center,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: gradientColors,
+                          ),
+                        ),
+                      );
+                    },
+                  )
+                : Image.network(
+                    project.image,
+                    fit: BoxFit.cover,
+                    alignment: Alignment.center,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: gradientColors,
+                          ),
+                        ),
+                        child: const Center(
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: gradientColors,
+                          ),
+                        ),
+                      );
+                    },
+                  )),
         // Color tint overlay (light at top)
         Container(
           decoration: BoxDecoration(
