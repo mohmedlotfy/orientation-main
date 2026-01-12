@@ -26,6 +26,7 @@ dependencies:
   chewie: ^1.7.4
   file_picker: ^8.1.2
   flutter_local_notifications: ^17.2.2
+  just_audio: ^0.9.36
 
 dev_dependencies:
   flutter_test:
@@ -47,6 +48,7 @@ flutter:
     - assets/change_inventory/
     - assets/app_icon/
     - assets/videos/
+    - assets/audio/
     - assets/menu_header.png
     - assets/orientation_logo.png
 
