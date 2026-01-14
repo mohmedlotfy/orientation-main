@@ -20,6 +20,9 @@ export class User {
   @Prop({ type: [Types.ObjectId], ref: 'Project' })
   savedProjects: Types.ObjectId[];
 
+  @Prop({ type: [Types.ObjectId], ref: 'Reel' })
+  savedReels: Types.ObjectId[];
+
   @Prop({
     type: String,
     required: false,

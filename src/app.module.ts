@@ -9,6 +9,8 @@ import { ProjectsModule } from './projects/projects.module';
 import { DeveloperModule } from './developer/developer.module';
 import { S3Module } from './s3/s3.module';
 import { EpisodeModule } from './episode/episode.module';
+import { ReelsModule } from './reels/reels.module';
+import { FilesModule } from './files/files.module';
 ;
 
 @Module({
@@ -32,6 +34,8 @@ import { EpisodeModule } from './episode/episode.module';
     DeveloperModule,
     S3Module,
     EpisodeModule,
+    ReelsModule,
+    FilesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

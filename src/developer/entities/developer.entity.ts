@@ -4,7 +4,7 @@ import { Document, Types } from 'mongoose';
 export type DeveloperDoc = Developer & Document;
 
 @Schema({ timestamps: true })
-export class Developer extends Document {
+export class Developer {
   @Prop({ required: true, trim: true })
   name: string;
 
@@ -32,5 +32,3 @@ export const DeveloperSchema = SchemaFactory.createForClass(Developer);
 
 // Indexes
 DeveloperSchema.index({ name: 'text' });
-DeveloperSchema.index({ slug: 1 });
-DeveloperSchema.index({ featured: 1 });

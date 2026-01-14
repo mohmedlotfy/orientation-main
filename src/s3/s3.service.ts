@@ -65,7 +65,7 @@ export class S3Service {
           ServerSideEncryption: 'AES256',
         },
         queueSize: 4,
-        partSize: 1024 * 1024 * 5, // 5MB parts
+        partSize: 1024 * 1024 * 20, // 20MB parts
       });
 
       upload.on('httpUploadProgress', (progress) => {

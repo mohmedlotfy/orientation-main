@@ -102,8 +102,10 @@ export class ProjectsService {
   findAll(query: QueryProjectDto) {
     const { developerId, location, status, title, slug, limit, page, sortBy } =
       query;
-    const mongoQuery = this.projectModel.find({ deletedAt: null });
+      // Populate developer with name and logoUrl and episodes and reels
+    const mongoQuery = this.projectModel.find({ deletedAt: null })
     mongoQuery.populate('developer');
+    mongoQuery.populate('episodes');
     if (developerId) {
       mongoQuery.where('developer').equals(developerId);
     }
