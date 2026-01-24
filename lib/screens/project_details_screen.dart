@@ -110,7 +110,15 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     }
 
     try {
+      debugPrint('🔍 Loading project with ID: ${widget.projectId}');
       final project = await _projectApi.getProjectById(widget.projectId!);
+      if (project != null) {
+        debugPrint('✅ Project loaded: ${project.title}');
+        debugPrint('   - advertisementVideoUrl: ${project.advertisementVideoUrl}');
+        debugPrint('   - hasVideo: ${project.hasVideo}');
+      } else {
+        debugPrint('❌ Project not found!');
+      }
       final episodes = await _projectApi.getEpisodes(widget.projectId!);
       final clips = await _projectApi.getClipsByProject(widget.projectId!);
       final pdfFiles = await _projectApi.getPdfFiles(widget.projectId!);
@@ -193,15 +201,19 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   }
 
   Future<void> _initializeAdVideo() async {
-    if (_project == null) return;
+    if (_project == null) {
+      debugPrint('❌ _initializeAdVideo: Project is null');
+      return;
+    }
     
     // Stop and dispose previous controller if exists
     _adVideoController?.pause();
     await _adVideoController?.dispose();
     
     // Backend determines if project has video or image
-    // If hasVideo is false or null, show image instead
+    // Only skip video if hasVideo is explicitly false
     if (_project!.hasVideo == false) {
+      debugPrint('❌ _initializeAdVideo: hasVideo is false, showing image');
       if (mounted) {
         setState(() {
           _adVideoController = null;
@@ -215,6 +227,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     
     // If advertisementVideoUrl is empty, don't load video - show image instead
     if (videoUrl.isEmpty) {
+      debugPrint('❌ _initializeAdVideo: videoUrl is empty, showing image');
       if (mounted) {
         setState(() {
           _adVideoController = null;
@@ -222,6 +235,9 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
       }
       return;
     }
+    
+    // Debug: Print video info
+    debugPrint('✅ _initializeAdVideo: hasVideo=${_project!.hasVideo}, videoUrl=$videoUrl');
     
     try {
       debugPrint('Initializing video with URL: $videoUrl');
@@ -663,19 +679,35 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
                         ),
                       ),
                     )
-                  : (projectImage.isNotEmpty
-                      ? (isAsset
-                          ? Image.asset(
-                              projectImage,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) => _buildGradientBackground(),
-                            )
-                          : Image.network(
-                              projectImage,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) => _buildGradientBackground(),
-                            ))
-                      : _buildGradientBackground()),
+                  : Stack(
+                      children: [
+                        // Show image while video is loading
+                        if (projectImage.isNotEmpty)
+                          (isAsset
+                              ? Image.asset(
+                                  projectImage,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => _buildGradientBackground(),
+                                )
+                              : Image.network(
+                                  projectImage,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => _buildGradientBackground(),
+                                ))
+                        else
+                          _buildGradientBackground(),
+                        // Show loading indicator if video is being initialized
+                        if (_adVideoController != null && !_adVideoController!.value.isInitialized)
+                          Container(
+                            color: Colors.black54,
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                color: Color(0xFFE50914),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
             ),
           ),
           // Dark overlay gradient - darker towards bottom to blend with black section
@@ -1211,6 +1243,7 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
                 MaterialPageRoute(
                   builder: (context) => ProjectDetailsScreen(
                     projectId: project.id,
+                    initialTabIndex: 1, // Open directly on Episodes tab
                   ),
                 ),
               ).then((_) {

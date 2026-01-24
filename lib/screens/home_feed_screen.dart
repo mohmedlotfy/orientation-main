@@ -287,7 +287,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
       print('  - Latest: ${(results[1] as List).length}');
       print('  - Continue Watching: ${(results[2] as List).length}');
       print('  - Top 10: ${(results[3] as List).length}');
-      
+
       if (mounted) {
         setState(() {
           _featuredProjects = results[0] as List<ProjectModel>;
@@ -696,7 +696,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
             errorBuilder: (context, error, stackTrace) {
               return const SizedBox.shrink();
             },
-          );
+    );
   }
 
   Widget _buildWatchButton() {
@@ -707,15 +707,15 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
     return GestureDetector(
       onTap: () {
         if (projectToOpen != null) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ProjectDetailsScreen(
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProjectDetailsScreen(
                 projectId: projectToOpen.id,
-                initialTabIndex: 1, // Open on Episodes tab
-              ),
+              initialTabIndex: 1, // Open on Episodes tab
             ),
-          );
+          ),
+        );
         }
       },
       child: Container(
@@ -782,55 +782,55 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
                 ),
               )
             : (isAsset
-                ? Image.asset(
-                    project.image,
-                    fit: BoxFit.cover,
-                    alignment: Alignment.center,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: gradientColors,
-                          ),
-                        ),
-                      );
-                    },
-                  )
-                : Image.network(
-                    project.image,
-                    fit: BoxFit.cover,
-                    alignment: Alignment.center,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: gradientColors,
-                          ),
-                        ),
-                        child: const Center(
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        ),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: gradientColors,
-                          ),
-                        ),
-                      );
-                    },
+            ? Image.asset(
+                project.image,
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: gradientColors,
+                      ),
+                    ),
+                  );
+                },
+              )
+            : Image.network(
+                project.image,
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: gradientColors,
+                      ),
+                    ),
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: gradientColors,
+                      ),
+                    ),
+                  );
+                },
                   )),
         // Color tint overlay (light at top)
         Container(
