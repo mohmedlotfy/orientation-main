@@ -12,9 +12,9 @@ import '../models/episode_model.dart';
 import '../models/clip_model.dart';
 import '../models/pdf_file_model.dart';
 import '../services/api/project_api.dart';
+import '../services/api/home_api.dart';
 import '../utils/auth_helper.dart';
 import '../widgets/skeleton_loader.dart';
-import '../data/mock_data.dart';
 
 class ProjectDetailsScreen extends StatefulWidget {
   final String? projectId;
@@ -34,6 +34,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tabController;
   final ProjectApi _projectApi = ProjectApi();
+  final HomeApi _homeApi = HomeApi();
 
   static const Color brandRed = Color(0xFFE50914);
   static const Color brandGreen = Color(0xFF00C853);
@@ -101,73 +102,10 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
 
   Future<void> _loadProjectData() async {
     if (widget.projectId == null) {
-      // Use default mock project for demo
-      final defaultProject = MockData.featuredProjects.isNotEmpty 
-          ? MockData.featuredProjects.first 
-          : null;
-      // Get related projects for default project
-      List<ProjectModel> relatedProjects = [];
-      if (defaultProject != null) {
-        // First, try to get projects from same area
-        if (defaultProject.area.isNotEmpty) {
-          final areaProjects = MockData.getProjectsByArea(defaultProject.area);
-          for (final areaProject in areaProjects) {
-            if (areaProject.id != defaultProject.id && 
-                !relatedProjects.any((p) => p.id == areaProject.id)) {
-              relatedProjects.add(areaProject);
-              if (relatedProjects.length >= 3) break;
-            }
-          }
-        }
-        // If not enough, add projects from same developer
-        if (relatedProjects.length < 3 && defaultProject.developerId.isNotEmpty) {
-          final devProjects = MockData.getProjectsByDeveloperId(defaultProject.developerId);
-          for (final devProject in devProjects) {
-            if (devProject.id != defaultProject.id && 
-                !relatedProjects.any((p) => p.id == devProject.id)) {
-              relatedProjects.add(devProject);
-              if (relatedProjects.length >= 3) break;
-            }
-          }
-        }
-        // If still not enough, add any other projects
-        if (relatedProjects.length < 3) {
-          final allProjects = [
-            ...MockData.featuredProjects,
-            ...MockData.latestProjects,
-            ...MockData.top10Projects,
-          ];
-          for (final otherProject in allProjects) {
-            if (otherProject.id != defaultProject.id && 
-                !relatedProjects.any((p) => p.id == otherProject.id)) {
-              relatedProjects.add(otherProject);
-              if (relatedProjects.length >= 3) break;
-            }
-          }
-        }
-        relatedProjects = relatedProjects.take(3).toList();
-      }
-      
-      // Stop current video before loading new project
-      _adVideoController?.pause();
-      
+      // If no project ID provided, show error state
       setState(() {
-        _project = defaultProject;
-        // Get episodes for the default project (not just first 3)
-        _episodes = defaultProject != null
-            ? MockData.getEpisodesByProjectId(defaultProject.id)
-            : MockData.episodes.take(3).toList();
-        _clips = defaultProject != null 
-            ? MockData.getClipsByProjectId(defaultProject.id)
-            : [];
-        _pdfFiles = defaultProject != null
-            ? MockData.getPdfFilesByProjectId(defaultProject.id)
-            : [];
-        _relatedProjects = relatedProjects;
         _isLoading = false;
       });
-      _checkIfSaved();
-      _initializeAdVideo();
       return;
     }
 
@@ -183,39 +121,47 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
       if (project != null) {
         // First, try to get projects from same area (more likely to have multiple projects)
         if (project.area.isNotEmpty) {
-          final areaProjects = MockData.getProjectsByArea(project.area);
-          for (final areaProject in areaProjects) {
-            if (areaProject.id != project.id && 
-                !relatedProjects.any((p) => p.id == areaProject.id)) {
-              relatedProjects.add(areaProject);
-              if (relatedProjects.length >= 3) break;
+          try {
+            final areaProjects = await _homeApi.getProjectsByArea(project.area);
+            for (final areaProject in areaProjects) {
+              if (areaProject.id != project.id && 
+                  !relatedProjects.any((p) => p.id == areaProject.id)) {
+                relatedProjects.add(areaProject);
+                if (relatedProjects.length >= 3) break;
+              }
             }
+          } catch (e) {
+            print('Error getting projects by area: $e');
           }
         }
         // If not enough, add projects from same developer
         if (relatedProjects.length < 3 && project.developerId.isNotEmpty) {
-          final devProjects = await _projectApi.getDeveloperProjects(project.developerId);
-          for (final devProject in devProjects) {
-            if (devProject.id != project.id && 
-                !relatedProjects.any((p) => p.id == devProject.id)) {
-              relatedProjects.add(devProject);
-              if (relatedProjects.length >= 3) break;
+          try {
+            final devProjects = await _projectApi.getDeveloperProjects(project.developerId);
+            for (final devProject in devProjects) {
+              if (devProject.id != project.id && 
+                  !relatedProjects.any((p) => p.id == devProject.id)) {
+                relatedProjects.add(devProject);
+                if (relatedProjects.length >= 3) break;
+              }
             }
+          } catch (e) {
+            print('Error getting developer projects: $e');
           }
         }
-        // If still not enough, add any other projects
+        // If still not enough, get featured projects
         if (relatedProjects.length < 3) {
-          final allProjects = [
-            ...MockData.featuredProjects,
-            ...MockData.latestProjects,
-            ...MockData.top10Projects,
-          ];
-          for (final otherProject in allProjects) {
-            if (otherProject.id != project.id && 
-                !relatedProjects.any((p) => p.id == otherProject.id)) {
-              relatedProjects.add(otherProject);
-              if (relatedProjects.length >= 3) break;
+          try {
+            final featuredProjects = await _homeApi.getFeaturedProjects();
+            for (final otherProject in featuredProjects) {
+              if (otherProject.id != project.id && 
+                  !relatedProjects.any((p) => p.id == otherProject.id)) {
+                relatedProjects.add(otherProject);
+                if (relatedProjects.length >= 3) break;
+              }
             }
+          } catch (e) {
+            print('Error getting featured projects: $e');
           }
         }
         // Limit to 3 projects
