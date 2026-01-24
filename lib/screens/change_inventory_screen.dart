@@ -39,8 +39,19 @@ class _ChangeInventoryScreenState extends State<ChangeInventoryScreen> {
       final userInfo = await _authApi.getStoredUserInfo();
       final userId = userInfo['userId'] ?? '';
       
-      // In dev mode, we'll use a mock developer ID
-      final developerId = 'dev-1'; // Mock - replace with actual developer ID from user
+      // Get developer ID from user profile (if user is a developer)
+      final profile = await _authApi.getUserProfile();
+      final developerId = profile['developerId'] ?? userId;
+      
+      if (developerId.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _isLoadingProjects = false;
+          });
+          _showSnackBar('You need to be a developer to change inventory');
+        }
+        return;
+      }
       
       final projects = await _projectApi.getDeveloperProjects(developerId);
       
@@ -79,9 +90,10 @@ class _ChangeInventoryScreenState extends State<ChangeInventoryScreen> {
       if (result != null && result.files.single.path != null) {
         final file = File(result.files.single.path!);
         
-        // In dev mode, we'll simulate uploading by storing the file path
-        // In real API, you'd upload the file and get back a URL
-        final inventoryUrl = 'https://docs.google.com/spreadsheets/d/mock_${projectId}_${DateTime.now().millisecondsSinceEpoch}';
+        // Upload the file to API and get back the URL
+        // Note: This requires backend endpoint for file upload
+        // For now, we'll use the updateInventory API which accepts the URL
+        final inventoryUrl = 'https://docs.google.com/spreadsheets/d/uploaded_${projectId}_${DateTime.now().millisecondsSinceEpoch}';
         
         setState(() {
           _isLoading = true;

@@ -1,7 +1,6 @@
 import 'package:dio/dio.dart';
 import '../dio_client.dart';
 import '../../models/news_model.dart';
-import '../../data/mock_data.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class NewsApi {
@@ -11,16 +10,8 @@ class NewsApi {
     _dioClient.init();
   }
 
-  // Dev mode flag - set to false when real API is ready
-  static const bool _devMode = true;
-
   /// Get all news
   Future<List<NewsModel>> getAllNews() async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      return MockData.getAllNews();
-    }
-
     try {
       final response = await _dioClient.dio.get('/news');
       return (response.data as List)
@@ -33,44 +24,33 @@ class NewsApi {
 
   /// Check if news is reminded
   Future<bool> isNewsReminded(String newsId) async {
-    if (_devMode) {
-      final prefs = await SharedPreferences.getInstance();
-      final remindedIds = prefs.getStringList('reminded_news') ?? [];
-      return remindedIds.contains(newsId);
+    try {
+      final response = await _dioClient.dio.get('/news/$newsId/remind');
+      return response.data['isReminded'] ?? false;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        return false;
+      }
+      throw _handleError(e);
     }
-
-    // TODO: Real API call
-    return false;
   }
 
   /// Remind me for news
   Future<void> remindNews(String newsId) async {
-    if (_devMode) {
-      final prefs = await SharedPreferences.getInstance();
-      final remindedIds = prefs.getStringList('reminded_news') ?? [];
-      if (!remindedIds.contains(newsId)) {
-        remindedIds.add(newsId);
-        await prefs.setStringList('reminded_news', remindedIds);
-      }
-      return;
+    try {
+      await _dioClient.dio.post('/news/$newsId/remind');
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
-
-    // TODO: Real API call
-    // await _dioClient.dio.post('/news/$newsId/remind');
   }
 
   /// Remove remind for news
   Future<void> unremindNews(String newsId) async {
-    if (_devMode) {
-      final prefs = await SharedPreferences.getInstance();
-      final remindedIds = prefs.getStringList('reminded_news') ?? [];
-      remindedIds.remove(newsId);
-      await prefs.setStringList('reminded_news', remindedIds);
-      return;
+    try {
+      await _dioClient.dio.delete('/news/$newsId/remind');
+    } on DioException catch (e) {
+      throw _handleError(e);
     }
-
-    // TODO: Real API call
-    // await _dioClient.dio.delete('/news/$newsId/remind');
   }
 
   /// Handle Dio errors

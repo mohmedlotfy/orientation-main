@@ -5,7 +5,6 @@ import '../../models/project_model.dart';
 import '../../models/episode_model.dart';
 import '../../models/clip_model.dart';
 import '../../models/pdf_file_model.dart';
-import '../../data/mock_data.dart';
 
 class ProjectApi {
   final DioClient _dioClient = DioClient();
@@ -14,120 +13,104 @@ class ProjectApi {
     _dioClient.init();
   }
 
-  // Dev mode flag - set to false when real API is ready
-  static const bool _devMode = true;
-
   // Get project by ID
   Future<ProjectModel?> getProjectById(String id) async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      return MockData.getProjectById(id);
-    }
-
     try {
       final response = await _dioClient.dio.get('/projects/$id');
       return ProjectModel.fromJson(response.data);
     } on DioException catch (e) {
       print('Error getting project: ${e.message}');
-      // Fallback to mock data on error
-      return MockData.getProjectById(id);
+      rethrow;
     }
   }
 
   // Get episodes for a project
   Future<List<EpisodeModel>> getEpisodes(String projectId) async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    return MockData.getEpisodesByProjectId(projectId);
+    try {
+      final response = await _dioClient.dio.get('/projects/$projectId/episodes');
+      return (response.data as List)
+          .map((json) => EpisodeModel.fromJson(json))
+          .toList();
+    } on DioException catch (e) {
+      print('Error getting episodes: ${e.message}');
+      rethrow;
+    }
   }
 
   // Check if project is saved
   Future<bool> isProjectSaved(String projectId) async {
-    if (_devMode) {
-      final prefs = await SharedPreferences.getInstance();
-      final savedIds = prefs.getStringList('saved_projects') ?? [];
-      return savedIds.contains(projectId);
+    try {
+      final response = await _dioClient.dio.get('/projects/$projectId/saved');
+      return response.data['isSaved'] ?? false;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        return false;
+      }
+      print('Error checking if project is saved: ${e.message}');
+      rethrow;
     }
-
-    // TODO: Real API call
-    return false;
   }
 
   // Save project to favorites
   Future<void> saveProject(String projectId) async {
-    if (_devMode) {
-      final prefs = await SharedPreferences.getInstance();
-      final savedIds = prefs.getStringList('saved_projects') ?? [];
-      if (!savedIds.contains(projectId)) {
-        savedIds.add(projectId);
-        await prefs.setStringList('saved_projects', savedIds);
-      }
-      MockData.saveProject(projectId);
-      return;
+    try {
+      await _dioClient.dio.post('/projects/$projectId/save');
+    } on DioException catch (e) {
+      print('Error saving project: ${e.message}');
+      rethrow;
     }
-
-    // TODO: Real API call
-    // await _dioClient.dio.post('/projects/$projectId/save');
   }
 
   // Remove project from favorites
   Future<void> unsaveProject(String projectId) async {
-    if (_devMode) {
-      final prefs = await SharedPreferences.getInstance();
-      final savedIds = prefs.getStringList('saved_projects') ?? [];
-      savedIds.remove(projectId);
-      await prefs.setStringList('saved_projects', savedIds);
-      MockData.unsaveProject(projectId);
-      return;
+    try {
+      await _dioClient.dio.delete('/projects/$projectId/save');
+    } on DioException catch (e) {
+      print('Error unsaving project: ${e.message}');
+      rethrow;
     }
-
-    // TODO: Real API call
-    // await _dioClient.dio.delete('/projects/$projectId/save');
   }
 
   // Get all saved projects
   Future<List<ProjectModel>> getSavedProjects() async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      final prefs = await SharedPreferences.getInstance();
-      final savedIds = prefs.getStringList('saved_projects') ?? [];
-      
-      return savedIds
-          .map((id) => MockData.getProjectById(id))
-          .where((p) => p != null)
-          .cast<ProjectModel>()
+    try {
+      final response = await _dioClient.dio.get('/projects/saved');
+      return (response.data as List)
+          .map((e) => ProjectModel.fromJson(e))
           .toList();
+    } on DioException catch (e) {
+      print('Error getting saved projects: ${e.message}');
+      rethrow;
     }
-
-    // TODO: Real API call
-    // final response = await _dioClient.dio.get('/projects/saved');
-    // return (response.data as List).map((e) => ProjectModel.fromJson(e)).toList();
-    return [];
   }
 
   // Track watching progress
   Future<void> trackWatching(String projectId, String episodeId, double progress) async {
-    if (_devMode) {
-      final prefs = await SharedPreferences.getInstance();
-      final key = 'watch_progress_${projectId}_$episodeId';
-      await prefs.setDouble(key, progress);
-      // Debug: print to verify saving
-      print('✅ Saved progress: $key = $progress');
-      return;
+    try {
+      await _dioClient.dio.post(
+        '/projects/$projectId/episodes/$episodeId/progress',
+        data: {'progress': progress},
+      );
+    } on DioException catch (e) {
+      print('Error tracking progress: ${e.message}');
+      rethrow;
     }
-
-    // TODO: Real API call
-    // await _dioClient.dio.post('/projects/$projectId/episodes/$episodeId/progress', data: {'progress': progress});
   }
 
   // Get watching progress
   Future<double> getWatchingProgress(String projectId, String episodeId) async {
-    if (_devMode) {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getDouble('watch_progress_${projectId}_$episodeId') ?? 0.0;
+    try {
+      final response = await _dioClient.dio.get(
+        '/projects/$projectId/episodes/$episodeId/progress',
+      );
+      return (response.data['progress'] ?? 0.0).toDouble();
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        return 0.0;
+      }
+      print('Error getting progress: ${e.message}');
+      rethrow;
     }
-
-    // TODO: Real API call
-    return 0.0;
   }
 
   // Get continue watching projects (projects with watch progress > 0)
@@ -175,26 +158,16 @@ class ProjectApi {
     // Get projects with progress > 0
     final continueWatchingProjects = <ProjectModel>[];
     for (final entry in projectProgress.entries) {
-      // Try to get project from API first, then fallback to mock data
-      ProjectModel? project;
-      if (!_devMode) {
-        try {
-          project = await getProjectById(entry.key);
-        } catch (e) {
-          print('⚠️ Could not fetch project ${entry.key} from API: $e');
+      try {
+        final project = await getProjectById(entry.key);
+        if (project != null) {
+          continueWatchingProjects.add(
+            project.copyWith(watchProgress: entry.value),
+          );
+          print('✅ Added project: ${project.title} (${(entry.value * 100).toStringAsFixed(1)}%)');
         }
-      }
-      
-      // Fallback to mock data if API call failed or in dev mode
-      project ??= MockData.getProjectById(entry.key);
-      
-      if (project != null) {
-        continueWatchingProjects.add(
-          project.copyWith(watchProgress: entry.value),
-        );
-        print('✅ Added project: ${project.title} (${(entry.value * 100).toStringAsFixed(1)}%)');
-      } else {
-        print('❌ Project not found: ${entry.key}');
+      } catch (e) {
+        print('⚠️ Could not fetch project ${entry.key} from API: $e');
       }
     }
     
@@ -211,68 +184,62 @@ class ProjectApi {
 
   // Get clips for a project
   Future<List<ClipModel>> getClipsByProject(String projectId) async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      return MockData.getClipsByProjectId(projectId);
+    try {
+      final response = await _dioClient.dio.get('/projects/$projectId/clips');
+      return (response.data as List)
+          .map((e) => ClipModel.fromJson(e))
+          .toList();
+    } on DioException catch (e) {
+      print('Error getting clips: ${e.message}');
+      rethrow;
     }
-
-    // TODO: Real API call
-    // final response = await _dioClient.dio.get('/projects/$projectId/clips');
-    // return (response.data as List).map((e) => ClipModel.fromJson(e)).toList();
-    return [];
   }
 
   // Get all clips
   Future<List<ClipModel>> getAllClips() async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      return MockData.getAllClips();
+    try {
+      final response = await _dioClient.dio.get('/clips');
+      return (response.data as List)
+          .map((e) => ClipModel.fromJson(e))
+          .toList();
+    } on DioException catch (e) {
+      print('Error getting all clips: ${e.message}');
+      rethrow;
     }
-
-    // TODO: Real API call
-    return [];
   }
 
   // Check if clip is liked
   Future<bool> isClipLiked(String clipId) async {
-    if (_devMode) {
-      final prefs = await SharedPreferences.getInstance();
-      final likedIds = prefs.getStringList('liked_clips') ?? [];
-      return likedIds.contains(clipId);
+    try {
+      final response = await _dioClient.dio.get('/clips/$clipId/liked');
+      return response.data['isLiked'] ?? false;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        return false;
+      }
+      print('Error checking if clip is liked: ${e.message}');
+      rethrow;
     }
-
-    // TODO: Real API call
-    return false;
   }
 
   // Like a clip
   Future<void> likeClip(String clipId) async {
-    if (_devMode) {
-      final prefs = await SharedPreferences.getInstance();
-      final likedIds = prefs.getStringList('liked_clips') ?? [];
-      if (!likedIds.contains(clipId)) {
-        likedIds.add(clipId);
-        await prefs.setStringList('liked_clips', likedIds);
-      }
-      MockData.likeClip(clipId);
-      return;
+    try {
+      await _dioClient.dio.post('/clips/$clipId/like');
+    } on DioException catch (e) {
+      print('Error liking clip: ${e.message}');
+      rethrow;
     }
-
-    // TODO: Real API call
   }
 
   // Unlike a clip
   Future<void> unlikeClip(String clipId) async {
-    if (_devMode) {
-      final prefs = await SharedPreferences.getInstance();
-      final likedIds = prefs.getStringList('liked_clips') ?? [];
-      likedIds.remove(clipId);
-      await prefs.setStringList('liked_clips', likedIds);
-      MockData.unlikeClip(clipId);
-      return;
+    try {
+      await _dioClient.dio.delete('/clips/$clipId/like');
+    } on DioException catch (e) {
+      print('Error unliking clip: ${e.message}');
+      rethrow;
     }
-
-    // TODO: Real API call
   }
 
   // Add a new reel
@@ -286,41 +253,6 @@ class ProjectApi {
     required String? developerName,
     required String? developerLogo,
   }) async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      // Generate a new clip ID
-      final clipId = 'clip-${DateTime.now().millisecondsSinceEpoch}';
-      
-      // Create the clip (in dev mode, we'll use a placeholder video URL)
-      final clip = ClipModel(
-        id: clipId,
-        projectId: projectId ?? '',
-        title: title,
-        description: description,
-        videoUrl: videoPath ?? 'https://example.com/uploaded_reel_$clipId.mp4',
-        thumbnail: '', // Will be generated from video
-        isAsset: false,
-        developerName: developerName ?? '',
-        developerLogo: developerLogo ?? '',
-        likes: 0,
-        isLiked: false,
-        hasWhatsApp: hasWhatsApp,
-        createdAt: DateTime.now(),
-      );
-      
-      MockData.addClip(clip);
-      
-      // Store in SharedPreferences for persistence
-      final prefs = await SharedPreferences.getInstance();
-      final clipsJson = prefs.getStringList('user_clips') ?? [];
-      clipsJson.add(clipId);
-      await prefs.setStringList('user_clips', clipsJson);
-      
-      return true;
-    }
-
-    // Real API call
     try {
       final formData = FormData.fromMap({
         'title': title,
@@ -339,24 +271,14 @@ class ProjectApi {
       );
 
       return response.statusCode == 200 || response.statusCode == 201;
-    } catch (e) {
-      print('Error adding reel: $e');
-      return false;
+    } on DioException catch (e) {
+      print('Error adding reel: ${e.message}');
+      rethrow;
     }
-    //   'hasWhatsApp': hasWhatsApp,
-    // });
-    // final response = await _dioClient.dio.post('/clips', data: formData);
-    // return response.statusCode == 200;
-    return false;
   }
 
   // Get projects for a developer
   Future<List<ProjectModel>> getDeveloperProjects(String developerId) async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      return MockData.getProjectsByDeveloperId(developerId);
-    }
-
     try {
       final response = await _dioClient.dio.get('/projects', queryParameters: {
         'developerId': developerId,
@@ -366,61 +288,57 @@ class ProjectApi {
           .toList();
     } on DioException catch (e) {
       print('Error getting developer projects: ${e.message}');
-      // Fallback to mock data on error
-      return MockData.getProjectsByDeveloperId(developerId);
+      rethrow;
     }
   }
 
   // Update project inventory URL
   Future<bool> updateInventory(String projectId, String inventoryUrl) async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      
-      // Store in SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('inventory_$projectId', inventoryUrl);
-      
-      MockData.updateProjectInventory(projectId, inventoryUrl);
-      return true;
+    try {
+      final response = await _dioClient.dio.put(
+        '/projects/$projectId/inventory',
+        data: {
+          'inventoryUrl': inventoryUrl,
+        },
+      );
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      print('Error updating inventory: ${e.message}');
+      rethrow;
     }
-
-    // TODO: Real API call
-    // final response = await _dioClient.dio.put('/projects/$projectId/inventory', data: {
-    //   'inventoryUrl': inventoryUrl,
-    // });
-    // return response.statusCode == 200;
-    return false;
   }
 
   // Get inventory URL for a project
   Future<String?> getInventoryUrl(String projectId) async {
-    if (_devMode) {
-      final prefs = await SharedPreferences.getInstance();
-      final customUrl = prefs.getString('inventory_$projectId');
-      if (customUrl != null) return customUrl;
-      
-      // Fallback to project's default inventory URL
-      final project = await getProjectById(projectId);
-      return project?.inventoryUrl;
+    try {
+      final response = await _dioClient.dio.get('/projects/$projectId/inventory');
+      return response.data['inventoryUrl'];
+    } on DioException catch (e) {
+      // If endpoint doesn't exist, get from project
+      if (e.response?.statusCode == 404) {
+        try {
+          final project = await getProjectById(projectId);
+          return project?.inventoryUrl;
+        } catch (_) {
+          return null;
+        }
+      }
+      print('Error getting inventory URL: ${e.message}');
+      rethrow;
     }
-
-    // TODO: Real API call
-    return null;
   }
 
   // Get PDF files for a project
   Future<List<PdfFileModel>> getPdfFiles(String projectId) async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      return MockData.getPdfFilesByProjectId(projectId);
+    try {
+      final response = await _dioClient.dio.get('/projects/$projectId/pdf-files');
+      return (response.data as List)
+          .map((json) => PdfFileModel.fromJson(json))
+          .toList();
+    } on DioException catch (e) {
+      print('Error getting PDF files: ${e.message}');
+      rethrow;
     }
-
-    // TODO: Real API call
-    // final response = await _dioClient.dio.get('/projects/$projectId/pdf-files');
-    // return (response.data as List)
-    //     .map((json) => PdfFileModel.fromJson(json))
-    //     .toList();
-    return [];
   }
 }
 

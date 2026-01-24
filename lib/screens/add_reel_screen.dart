@@ -51,9 +51,19 @@ class _AddReelScreenState extends State<AddReelScreen> {
       final userInfo = await _authApi.getStoredUserInfo();
       final userId = userInfo['userId'] ?? '';
       
-      // In dev mode, we'll use a mock developer ID
-      // In real API, you'd get the developer ID from the user's profile
-      final developerId = 'dev-1'; // Mock - replace with actual developer ID from user
+      // Get developer ID from user profile (if user is a developer)
+      final profile = await _authApi.getUserProfile();
+      final developerId = profile['developerId'] ?? userId;
+      
+      if (developerId.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _isLoadingProjects = false;
+          });
+          _showSnackBar('You need to be a developer to add reels');
+        }
+        return;
+      }
       
       final projects = await _projectApi.getDeveloperProjects(developerId);
       
@@ -113,9 +123,20 @@ class _AddReelScreenState extends State<AddReelScreen> {
 
     try {
       final userInfo = await _authApi.getStoredUserInfo();
-      final developerId = 'dev-1'; // Mock - replace with actual developer ID
-      final developerName = 'Mountain View'; // Mock - replace with actual developer name
-      final developerLogo = 'assets/developers/mountain_view.png'; // Mock
+      
+      // Get developer information from user profile
+      final profile = await _authApi.getUserProfile();
+      final developerId = profile['developerId'] ?? userInfo['userId'] ?? '';
+      final developerName = profile['developerName'] ?? '';
+      final developerLogo = profile['developerLogo'] ?? '';
+      
+      if (developerId.isEmpty) {
+        setState(() {
+          _isLoading = false;
+        });
+        _showSnackBar('You need to be a developer to add reels', isError: true);
+        return;
+      }
 
       // Use selected project ID
       final projectId = _watchOrientationEnabled ? _selectedProjectId : null;

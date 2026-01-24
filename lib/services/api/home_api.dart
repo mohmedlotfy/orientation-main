@@ -3,7 +3,6 @@ import '../dio_client.dart';
 import '../../models/project_model.dart';
 import '../../models/developer_model.dart';
 import '../../models/area_model.dart';
-import '../../data/mock_data.dart';
 import 'project_api.dart';
 
 class HomeApi {
@@ -14,16 +13,8 @@ class HomeApi {
     _dioClient.init();
   }
 
-  // TODO: Set to false when backend is ready
-  static const bool _devMode = true;
-
   /// Get featured projects for carousel
   Future<List<ProjectModel>> getFeaturedProjects() async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      return MockData.featuredProjects;
-    }
-
     try {
       // Get trending projects as featured
       final response = await _dioClient.dio.get('/projects/trending', queryParameters: {
@@ -34,18 +25,12 @@ class HomeApi {
           .toList();
     } on DioException catch (e) {
       print('Error getting featured projects: ${e.message}');
-      // Fallback to mock data on error
-      return MockData.featuredProjects;
+      throw _handleError(e);
     }
   }
 
   /// Get latest projects
   Future<List<ProjectModel>> getLatestProjects() async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      return MockData.latestProjects;
-    }
-
     try {
       // Get projects sorted by newest
       final response = await _dioClient.dio.get('/projects', queryParameters: {
@@ -57,8 +42,7 @@ class HomeApi {
           .toList();
     } on DioException catch (e) {
       print('Error getting latest projects: ${e.message}');
-      // Fallback to mock data on error
-      return MockData.latestProjects;
+      throw _handleError(e);
     }
   }
 
@@ -125,11 +109,6 @@ class HomeApi {
 
   /// Get top 10 projects
   Future<List<ProjectModel>> getTop10Projects() async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      return MockData.top10Projects;
-    }
-
     try {
       // Get trending projects (top 10)
       final response = await _dioClient.dio.get('/projects/trending', queryParameters: {
@@ -140,18 +119,12 @@ class HomeApi {
           .toList();
     } on DioException catch (e) {
       print('Error getting top 10 projects: ${e.message}');
-      // Fallback to mock data on error
-      return MockData.top10Projects;
+      throw _handleError(e);
     }
   }
 
   /// Get projects by area
   Future<List<ProjectModel>> getProjectsByArea(String area) async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      return MockData.getProjectsByArea(area);
-    }
-
     try {
       // Get projects filtered by location
       final response = await _dioClient.dio.get('/projects', queryParameters: {
@@ -163,18 +136,12 @@ class HomeApi {
           .toList();
     } on DioException catch (e) {
       print('Error getting projects by area: ${e.message}');
-      // Fallback to mock data on error
-      return MockData.getProjectsByArea(area);
+      throw _handleError(e);
     }
   }
 
   /// Get upcoming projects
   Future<List<ProjectModel>> getUpcomingProjects() async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      return MockData.upcomingProjects;
-    }
-
     try {
       // Get projects with status PLANNING or CONSTRUCTION
       final response = await _dioClient.dio.get('/projects', queryParameters: {
@@ -187,18 +154,12 @@ class HomeApi {
       return projects;
     } on DioException catch (e) {
       print('Error getting upcoming projects: ${e.message}');
-      // Fallback to mock data on error
-      return MockData.upcomingProjects;
+      throw _handleError(e);
     }
   }
 
   /// Get projects by category
   Future<List<ProjectModel>> getProjectsByCategory(String category) async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      return MockData.getProjectsByCategory(category);
-    }
-
     try {
       final response = await _dioClient.dio.get('/projects/category/$category');
       return (response.data as List)
@@ -211,11 +172,6 @@ class HomeApi {
 
   /// Get all developers
   Future<List<DeveloperModel>> getDevelopers() async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      return MockData.developers;
-    }
-
     try {
       final response = await _dioClient.dio.get('/developer');
       return (response.data as List)
@@ -223,18 +179,12 @@ class HomeApi {
           .toList();
     } on DioException catch (e) {
       print('Error getting developers: ${e.message}');
-      // Fallback to mock data on error
-      return MockData.developers;
+      throw _handleError(e);
     }
   }
 
   /// Get all areas
   Future<List<AreaModel>> getAreas() async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      return MockData.areas;
-    }
-
     try {
       final response = await _dioClient.dio.get('/areas');
       return (response.data as List)

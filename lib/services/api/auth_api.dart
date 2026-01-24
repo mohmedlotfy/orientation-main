@@ -10,8 +10,6 @@ class AuthApi {
     _dioClient.init();
   }
 
-  // TODO: Set to false when backend is ready
-  static const bool _devMode = true;
 
   /// Set the API base URL dynamically
   void setBaseUrl(String url) {
@@ -20,27 +18,6 @@ class AuthApi {
 
   /// Login with email and password
   Future<AuthResponse> login(String email, String password) async {
-    // Dev mode: bypass backend and login directly
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      final mockUser = UserModel(
-        id: 'dev-user-001',
-        username: email.split('@').first,
-        email: email,
-        role: 'developer',
-      );
-      
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('auth_token', 'dev-token-12345');
-      await prefs.setString('user_id', mockUser.id);
-      await prefs.setString('user_email', mockUser.email);
-      await prefs.setString('user_name', mockUser.username);
-      await prefs.setString('user_role', mockUser.role);
-      
-      return AuthResponse(user: mockUser, token: 'dev-token-12345');
-    }
-
     try {
       final response = await _dioClient.dio.post(
         '/auth/login',
@@ -73,31 +50,6 @@ class AuthApi {
     required String phoneNumber,
     required String password,
   }) async {
-    // Dev mode: bypass backend and register directly
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      final mockUser = UserModel(
-        id: 'dev-user-${DateTime.now().millisecondsSinceEpoch}',
-        username: username,
-        email: email,
-        phoneNumber: phoneNumber,
-        role: 'user',
-      );
-      
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('auth_token', 'dev-token-${DateTime.now().millisecondsSinceEpoch}');
-      await prefs.setString('user_id', mockUser.id);
-      await prefs.setString('user_email', mockUser.email);
-      await prefs.setString('user_name', mockUser.username);
-      await prefs.setString('user_role', mockUser.role);
-      if (phoneNumber.isNotEmpty) {
-        await prefs.setString('user_phone', phoneNumber);
-      }
-      
-      return AuthResponse(user: mockUser, token: 'dev-token-${DateTime.now().millisecondsSinceEpoch}');
-    }
-
     try {
       final response = await _dioClient.dio.post(
         '/auth/register',
@@ -158,18 +110,6 @@ class AuthApi {
 
   /// Send OTP to email for password reset
   Future<bool> forgotPassword(String email) async {
-    // Dev mode: simulate sending OTP
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      // Store email for later verification
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('reset_email', email);
-      await prefs.setString('reset_otp', '1234'); // Dev OTP code
-      
-      return true;
-    }
-
     try {
       await _dioClient.dio.post(
         '/auth/forgot-password',
@@ -183,21 +123,6 @@ class AuthApi {
 
   /// Verify OTP code
   Future<bool> verifyOTP(String email, String otp) async {
-    // Dev mode: verify against stored OTP
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      final prefs = await SharedPreferences.getInstance();
-      final storedOtp = prefs.getString('reset_otp');
-      
-      // In dev mode, accept "1234" as valid OTP
-      if (otp == '1234' || otp == storedOtp) {
-        await prefs.setBool('otp_verified', true);
-        return true;
-      }
-      throw 'Invalid OTP code. Use 1234 for testing.';
-    }
-
     try {
       await _dioClient.dio.post(
         '/auth/verify-otp',
@@ -214,25 +139,6 @@ class AuthApi {
 
   /// Reset password with new password
   Future<bool> resetPassword(String newPassword) async {
-    // Dev mode: simulate password reset
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      final prefs = await SharedPreferences.getInstance();
-      final isVerified = prefs.getBool('otp_verified') ?? false;
-      
-      if (!isVerified) {
-        throw 'Please verify OTP first.';
-      }
-      
-      // Clear reset data
-      await prefs.remove('reset_email');
-      await prefs.remove('reset_otp');
-      await prefs.remove('otp_verified');
-      
-      return true;
-    }
-
     try {
       final prefs = await SharedPreferences.getInstance();
       final email = prefs.getString('reset_email');
@@ -258,18 +164,6 @@ class AuthApi {
 
   /// Get user profile information
   Future<Map<String, String?>> getUserProfile() async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      final prefs = await SharedPreferences.getInstance();
-      return {
-        'firstName': prefs.getString('user_first_name') ?? '',
-        'lastName': prefs.getString('user_last_name') ?? '',
-        'email': prefs.getString('user_email') ?? '',
-        'phoneNumber': prefs.getString('user_phone') ?? '',
-        'username': prefs.getString('user_name') ?? '',
-      };
-    }
-
     try {
       final response = await _dioClient.dio.get('/auth/profile');
       final firstName = response.data['firstName'] ?? '';
@@ -318,26 +212,6 @@ class AuthApi {
     required String email,
     required String phoneNumber,
   }) async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      // Ensure email contains @ before saving
-      if (!email.contains('@')) {
-        throw Exception('Email must contain @ symbol');
-      }
-      
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('user_first_name', firstName);
-      await prefs.setString('user_last_name', lastName);
-      await prefs.setString('user_email', email); // Save email with @
-      await prefs.setString('user_phone', phoneNumber);
-      
-      // Update username to reflect first name and last name
-      await prefs.setString('user_name', '$firstName $lastName');
-      
-      return true;
-    }
-
     try {
       final response = await _dioClient.dio.put(
         '/auth/profile',
@@ -373,12 +247,6 @@ class AuthApi {
   Future<bool> updatePassword({
     required String newPassword,
   }) async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      // In dev mode, just simulate success
-      return true;
-    }
-
     try {
       await _dioClient.dio.put(
         '/auth/password',

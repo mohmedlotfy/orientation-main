@@ -43,37 +43,9 @@ class AdminApi {
     _dioClient.init();
   }
 
-  static const bool _devMode = true; // Toggle this for API integration
 
   /// Submit join request (user applying to become developer)
   Future<bool> submitJoinRequest(JoinRequestModel request) async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      // Store join request in SharedPreferences (mock)
-      final prefs = await SharedPreferences.getInstance();
-      final userId = prefs.getString('user_id') ?? 'unknown';
-      final requestId = 'join-request-${DateTime.now().millisecondsSinceEpoch}';
-      
-      // Store as JSON string
-      await prefs.setString('join_request_$requestId', '''
-{
-  "id": "$requestId",
-  "userId": "$userId",
-  "companyName": "${request.companyName}",
-  "headOffice": "${request.headOffice}",
-  "projectName": "${request.projectName}",
-  "orientationsCount": ${request.orientationsCount},
-  "notes": "${request.notes ?? ''}",
-  "status": "pending",
-  "createdAt": "${DateTime.now().toIso8601String()}"
-}
-''');
-      
-      print('✅ Join request submitted: $requestId');
-      return true;
-    }
-
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
@@ -93,24 +65,6 @@ class AdminApi {
 
   /// Get all join requests (Admin only)
   Future<List<JoinRequestModel>> getJoinRequests() async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 300));
-      
-      // Get all join requests from SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      final allKeys = prefs.getKeys();
-      final requests = <JoinRequestModel>[];
-      
-      for (final key in allKeys) {
-        if (key.startsWith('join_request_')) {
-          // Parse JSON string (simplified - in real app use jsonDecode)
-          // For now, return empty list in dev mode
-        }
-      }
-      
-      return requests;
-    }
-
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
@@ -122,8 +76,19 @@ class AdminApi {
         ),
       );
       
-      // TODO: Parse response
-      return [];
+      return (response.data as List)
+          .map((json) => JoinRequestModel(
+                id: json['id'] ?? '',
+                userId: json['userId'] ?? '',
+                companyName: json['companyName'] ?? '',
+                headOffice: json['headOffice'] ?? '',
+                projectName: json['projectName'] ?? '',
+                orientationsCount: json['orientationsCount'] ?? 0,
+                notes: json['notes'],
+                status: json['status'] ?? 'pending',
+                createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
+              ))
+          .toList();
     } on DioException catch (e) {
       throw _handleError(e);
     }
@@ -131,12 +96,6 @@ class AdminApi {
 
   /// Approve join request (Admin only)
   Future<bool> approveJoinRequest(String requestId) async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      print('✅ Join request approved: $requestId');
-      return true;
-    }
-
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
@@ -155,12 +114,6 @@ class AdminApi {
 
   /// Reject join request (Admin only)
   Future<bool> rejectJoinRequest(String requestId) async {
-    if (_devMode) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      print('✅ Join request rejected: $requestId');
-      return true;
-    }
-
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
