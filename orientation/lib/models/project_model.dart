@@ -24,9 +24,13 @@ class ProjectModel {
   final String whatsappNumber;
   final String locationUrl;
   final String inventoryUrl;
-  final String advertisementVideoUrl; // Video URL for advertisement in hero section
+  final String advertisementVideoUrl; // Video URL for advertisement in hero section (from heroVideoUrl in API)
+  final String projectThumbnailUrl; // Thumbnail image for project cards
   final String? logo; // Logo URL for the project
   final bool? hasVideo; // Backend determines if project has video (true) or image (false)
+  
+  // Getter to access heroVideoUrl directly (same as advertisementVideoUrl)
+  String get heroVideoUrl => advertisementVideoUrl;
 
   ProjectModel({
     required this.id,
@@ -54,6 +58,7 @@ class ProjectModel {
     this.locationUrl = '',
     this.inventoryUrl = '',
     this.advertisementVideoUrl = '',
+    this.projectThumbnailUrl = '',
     this.logo,
     this.hasVideo,
   });
@@ -124,6 +129,7 @@ class ProjectModel {
       locationUrl: json['locationUrl']?.toString() ?? json['mapsLocation']?.toString() ?? '',
       inventoryUrl: '', // from /files/get/inventory, not project payload
       advertisementVideoUrl: heroVideoUrl,
+      projectThumbnailUrl: json['projectThumbnailUrl']?.toString() ?? json['image']?.toString() ?? '',
       logo: json['logo']?.toString() ?? json['logoUrl']?.toString(),
       hasVideo: hasVideo,
     );
@@ -156,6 +162,7 @@ class ProjectModel {
       'locationUrl': locationUrl,
       'inventoryUrl': inventoryUrl,
       'advertisementVideoUrl': advertisementVideoUrl,
+      'projectThumbnailUrl': projectThumbnailUrl,
       'logo': logo,
       'hasVideo': hasVideo,
     };
@@ -187,6 +194,7 @@ class ProjectModel {
     String? locationUrl,
     String? inventoryUrl,
     String? advertisementVideoUrl,
+    String? projectThumbnailUrl,
     String? logo,
     bool? hasVideo,
   }) {
@@ -216,6 +224,7 @@ class ProjectModel {
       locationUrl: locationUrl ?? this.locationUrl,
       inventoryUrl: inventoryUrl ?? this.inventoryUrl,
       advertisementVideoUrl: advertisementVideoUrl ?? this.advertisementVideoUrl,
+      projectThumbnailUrl: projectThumbnailUrl ?? this.projectThumbnailUrl,
       logo: logo ?? this.logo,
       hasVideo: hasVideo ?? this.hasVideo,
     );

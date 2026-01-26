@@ -46,11 +46,13 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
 
   final List<String> _filters = ['Medical', 'Commercial', 'Residential', 'Hotel'];
 
-  // Video player for featured section
-  VideoPlayerController? _videoPlayerController;
-  ChewieController? _chewieController;
-  bool _isVideoInitialized = false;
-  ProjectModel? _videoProject; // Project that contains the video
+  // Video players for featured section - use Map to cache controllers
+  final Map<int, VideoPlayerController> _videoControllers = {};
+  final Map<int, ChewieController> _chewieControllers = {};
+  int _currentVideoIndex = -1; // Track which card's video is currently playing
+  bool _isSwipingFeatured = false;
+  int _swipeFromIndex = 0;
+  int _swipeToIndex = 0;
 
   static const Color brandRed = Color(0xFFE50914);
 
@@ -70,6 +72,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _featuredController.addListener(_onFeaturedScroll);
     // Load data asynchronously to avoid blocking UI
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadData();
@@ -78,43 +81,117 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
     // Video will be initialized after loading data (in _loadData)
   }
 
-  Future<void> _initializeVideo() async {
-    try {
-      // Use asset video only (no API video in dev mode)
-      String videoUrl = 'assets/videos/orientation.v2.mp4';
-      bool isNetworkVideo = false;
-      
-      // Set video project to first featured project
-      if (_featuredProjects.isNotEmpty) {
-        _videoProject = _featuredProjects.first;
+  void _onFeaturedScroll() {
+    if (_featuredProjects.isEmpty) return;
+    final page = _featuredController.page;
+    if (page == null) return;
+
+    final int floorIdx = page.floor();
+    final int ceilIdx = page.ceil();
+    final int maxIdx = _featuredProjects.length - 1;
+    final int from = floorIdx.clamp(0, maxIdx);
+    final int to = ceilIdx.clamp(0, maxIdx);
+
+    final double frac = page - floorIdx;
+    final bool isSwiping = frac > 0.001 && frac < 0.999 && from != to;
+
+    if (isSwiping) {
+      // Preload the two visible pages during swipe (current + neighbor)
+      if (!_videoControllers.containsKey(from)) {
+        _loadVideoForPage(from);
       }
+      if (!_videoControllers.containsKey(to)) {
+        _loadVideoForPage(to);
+      }
+
+      // Switch "active" video to the one user is swiping towards (after halfway)
+      final int active = (frac >= 0.5) ? to : from;
+      if (active != _currentVideoIndex) {
+        _currentVideoIndex = active;
+        _playVideoForPage(active);
+      }
+    }
+
+    // Update swipe state used by UI to decide what to render
+    if (mounted &&
+        (isSwiping != _isSwipingFeatured ||
+            from != _swipeFromIndex ||
+            to != _swipeToIndex)) {
+      setState(() {
+        _isSwipingFeatured = isSwiping;
+        _swipeFromIndex = from;
+        _swipeToIndex = to;
+      });
+    }
+  }
+
+  Future<void> _initializeVideo() async {
+    // Initialize video for first page (index 0) and preload adjacent ones
+    await _loadVideoForPage(0);
+    // Play first video after loading
+    if (_videoControllers.containsKey(0) && mounted) {
+      _currentVideoIndex = 0;
+      _playVideoForPage(0);
+    }
+    // Preload all adjacent videos for smooth transitions
+    if (_featuredProjects.length > 1) {
+      _loadVideoForPage(1); // Preload next video
+    }
+    if (_featuredProjects.length > 2) {
+      _loadVideoForPage(2); // Preload third video
+    }
+  }
+
+  Future<void> _loadVideoForPage(int index) async {
+    if (index < 0 || index >= _featuredProjects.length) {
+      return;
+    }
+
+    // If video is already loaded, just return
+    if (_videoControllers.containsKey(index)) {
+      return;
+    }
+
+    try {
+      final project = _featuredProjects[index];
+      final heroVideoUrl = project.advertisementVideoUrl;
+
+      if (heroVideoUrl.isEmpty) {
+        print('⚠️ No hero video URL for project at index $index: ${project.title}');
+        return;
+      }
+
+      print('🎥 Loading hero video for page $index: $heroVideoUrl');
 
       // Initialize video controller based on source
+      final isNetworkVideo = !heroVideoUrl.startsWith('assets/');
+      VideoPlayerController controller;
+      
       if (isNetworkVideo) {
-        _videoPlayerController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
+        controller = VideoPlayerController.networkUrl(Uri.parse(heroVideoUrl));
       } else {
-        _videoPlayerController = VideoPlayerController.asset(videoUrl);
+        controller = VideoPlayerController.asset(heroVideoUrl);
       }
 
-      await _videoPlayerController!.initialize();
+      await controller.initialize();
       
       if (!mounted) {
-        _videoPlayerController?.dispose();
+        await controller.dispose();
         return;
       }
       
       // Mute the video
-      await _videoPlayerController!.setVolume(0.0);
+      await controller.setVolume(0.0);
       
-      // Calculate aspect ratio to match the container (65% of screen height)
+      // Calculate aspect ratio
       final screenWidth = MediaQuery.of(context).size.width;
       final containerHeight = MediaQuery.of(context).size.height * 0.65;
       final targetAspectRatio = screenWidth / containerHeight;
       
-      _chewieController = ChewieController(
-        videoPlayerController: _videoPlayerController!,
-        autoPlay: true,
-        looping: false, // Disable looping to detect when video ends
+      final chewieController = ChewieController(
+        videoPlayerController: controller,
+        autoPlay: false, // Don't auto-play, we'll control it
+        looping: false,
         aspectRatio: targetAspectRatio,
         showControls: false,
         allowFullScreen: false,
@@ -138,23 +215,110 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
         },
       );
 
-      await _videoPlayerController!.play();
-
-      // Listen for video completion to auto-scroll to next project
-      _videoPlayerController!.addListener(_videoListener);
+      // Add listener for video completion
+      controller.addListener(() => _videoListenerForIndex(index, controller));
 
       if (mounted) {
         setState(() {
-          _isVideoInitialized = true;
+          _videoControllers[index] = controller;
+          _chewieControllers[index] = chewieController;
+          // If this is the current page, update video index to show it immediately
+          if (_currentFeaturedPage == index) {
+            _currentVideoIndex = index;
+          }
         });
+        print('✅ Video loaded for page $index');
+        
+        // If this is the current page, play it immediately
+        if (_currentFeaturedPage == index && mounted) {
+          controller.play();
+          setState(() {
+            _currentVideoIndex = index;
+          });
+        }
       }
     } catch (e) {
-      // Silently fail - video is optional
-      if (mounted) {
-        setState(() {
-          _isVideoInitialized = false;
-        });
+      print('❌ Error loading video for page $index: $e');
+    }
+  }
+
+  void _videoListenerForIndex(int index, VideoPlayerController controller) {
+    if (!controller.value.isInitialized ||
+        controller.value.duration.inMilliseconds == 0) {
+      return;
+    }
+
+    final position = controller.value.position;
+    final duration = controller.value.duration;
+    
+    // Check if video has ended
+    if (position.inMilliseconds >= (duration.inMilliseconds - 100)) {
+      // Video ended, move to next project if we're on this page
+      if (_currentFeaturedPage == index && 
+          _featuredProjects.length > 1 && 
+          mounted) {
+        final nextIndex = (index + 1) % _featuredProjects.length;
+        _featuredController.animateToPage(
+          nextIndex,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
       }
+    }
+  }
+
+  void _playVideoForPage(int index) {
+    // Store previous index
+    final previousIndex = _currentVideoIndex;
+    
+    // Pause previous video first
+    if (previousIndex >= 0 && 
+        previousIndex != index && 
+        _videoControllers.containsKey(previousIndex)) {
+      _videoControllers[previousIndex]?.pause();
+    }
+
+    // Play current video if it's loaded
+    if (_videoControllers.containsKey(index)) {
+      final controller = _videoControllers[index]!;
+      if (!controller.value.isPlaying) {
+        controller.play();
+      }
+      print('▶️ Playing video for page $index');
+    } else {
+      // Video not loaded yet, load it first
+      _loadVideoForPage(index).then((_) {
+        if (_videoControllers.containsKey(index) && mounted) {
+          final controller = _videoControllers[index]!;
+          controller.seekTo(Duration.zero);
+          controller.play();
+          if (mounted) {
+            setState(() {
+              _currentVideoIndex = index;
+            });
+          }
+        }
+      });
+    }
+
+    // Dispose old videos (keep only current and adjacent)
+    _disposeOldVideoControllers(index);
+  }
+
+  void _disposeOldVideoControllers(int currentIndex) {
+    final keysToRemove = <int>[];
+    for (var key in _videoControllers.keys) {
+      if ((key - currentIndex).abs() > 2) {
+        keysToRemove.add(key);
+      }
+    }
+    for (var key in keysToRemove) {
+      _videoControllers[key]?.removeListener(() {});
+      _chewieControllers[key]?.dispose();
+      _videoControllers[key]?.dispose();
+      _videoControllers.remove(key);
+      _chewieControllers.remove(key);
+      print('🗑️ Disposed video for page $key');
     }
   }
 
@@ -331,39 +495,23 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
     }
   }
 
-  void _videoListener() {
-    if (_videoPlayerController != null &&
-        _videoPlayerController!.value.isInitialized &&
-        _videoPlayerController!.value.duration.inMilliseconds > 0) {
-      final position = _videoPlayerController!.value.position;
-      final duration = _videoPlayerController!.value.duration;
-      
-      // Check if video has ended (position is at or very close to duration)
-      // Use a small threshold (100ms) to account for timing precision
-      if (position.inMilliseconds >= (duration.inMilliseconds - 100)) {
-        // Video ended, move to next project only if we're on the first page (with video)
-        if (_currentFeaturedPage == 0 && 
-            _featuredProjects.length > 1 && 
-            mounted) {
-          final nextIndex = (_currentFeaturedPage + 1) % _featuredProjects.length;
-          _featuredController.animateToPage(
-            nextIndex,
-            duration: const Duration(milliseconds: 500),
-            curve: Curves.easeInOut,
-          );
-        }
-      }
-    }
-  }
+  // _videoListener is now handled by _videoListenerForIndex
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _videoPlayerController?.removeListener(_videoListener);
+    _featuredController.removeListener(_onFeaturedScroll);
     _featuredController.dispose();
     _scrollController.dispose();
-    _chewieController?.dispose();
-    _videoPlayerController?.dispose();
+    // Dispose all video controllers
+    for (var controller in _videoControllers.values) {
+      controller.dispose();
+    }
+    for (var controller in _chewieControllers.values) {
+      controller.dispose();
+    }
+    _videoControllers.clear();
+    _chewieControllers.clear();
     super.dispose();
   }
 
@@ -597,19 +745,30 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
           PageView.builder(
             controller: _featuredController,
             onPageChanged: (index) {
-              setState(() {
-                _currentFeaturedPage = index;
-              });
-              // Restart video when moving to first page (index 0)
-              if (_videoPlayerController != null && 
-                  _videoPlayerController!.value.isInitialized && 
-                  mounted) {
-                if (index == 0) {
-                  _videoPlayerController!.seekTo(Duration.zero);
-                  _videoPlayerController!.play().catchError((_) {});
-                } else {
-                  _videoPlayerController!.pause();
-                }
+              // Update indices IMMEDIATELY before setState to show video during swipe
+              _currentVideoIndex = index;
+              _currentFeaturedPage = index;
+              
+              // Force immediate rebuild to show video during transition
+              if (mounted) {
+                setState(() {
+                  _currentFeaturedPage = index;
+                  _currentVideoIndex = index;
+                });
+              }
+              
+              // Play video immediately
+              _playVideoForPage(index);
+              
+              // Preload adjacent videos for next swipe
+              if (index + 1 < _featuredProjects.length && !_videoControllers.containsKey(index + 1)) {
+                _loadVideoForPage(index + 1);
+              }
+              if (index + 2 < _featuredProjects.length && !_videoControllers.containsKey(index + 2)) {
+                _loadVideoForPage(index + 2);
+              }
+              if (index - 1 >= 0 && !_videoControllers.containsKey(index - 1)) {
+                _loadVideoForPage(index - 1);
               }
             },
             itemCount: _featuredProjects.length,
@@ -630,30 +789,15 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
               child: _buildAppBar(),
             ),
           ),
-          // Logo above Watch button (static until API is connected)
+          // Logo above Watch button (dynamic from API)
           Positioned(
             bottom: 90,
             left: 0,
             right: 0,
             child: Center(
-              child: Image.asset(
-                'assets/images/logo.png/masaya_logo.png',
-                height: 100,
-                width: 200,
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) {
-                  // Try alternative path
-                  return Image.asset(
-                    'assets/images/masaya_logo.png',
-                    height: 100,
-                    width: 200,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const SizedBox.shrink();
-                    },
-                  );
-                },
-              ),
+              child: _featuredProjects.isNotEmpty
+                  ? _buildProjectLogo(_featuredProjects[_currentFeaturedPage])
+                  : const SizedBox.shrink(),
             ),
           ),
           // Watch button at bottom
@@ -672,52 +816,52 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
 
   Widget _buildProjectLogo(ProjectModel project) {
     // Use logo from API if available, otherwise show nothing
+    // Only use network images from API, don't use assets
     if (project.logo == null || project.logo!.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    return project.logo!.startsWith('http') || project.logo!.startsWith('https')
-        ? Image.network(
-            project.logo!,
-            height: 100,
+    // Only display if logo is a network URL (from API)
+    // Don't use assets - all logos should come from API
+    if (project.logo!.startsWith('http') || project.logo!.startsWith('https')) {
+      return Image.network(
+        project.logo!,
+        height: 100,
+        width: 200,
+        fit: BoxFit.contain,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return SizedBox(
             width: 200,
-            fit: BoxFit.contain,
-            loadingBuilder: (context, child, loadingProgress) {
-              if (loadingProgress == null) return child;
-              return SizedBox(
-                width: 200,
-                height: 100,
-                child: Center(
-                  child: CircularProgressIndicator(
-                    value: loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded /
-                            loadingProgress.expectedTotalBytes!
-                        : null,
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
-                ),
-              );
-            },
-            errorBuilder: (context, error, stackTrace) {
-              return const SizedBox.shrink();
-            },
-          )
-        : Image.asset(
-            project.logo!,
             height: 100,
-            width: 200,
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) {
-              return const SizedBox.shrink();
-            },
+            child: Center(
+              child: CircularProgressIndicator(
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
+                    : null,
+                color: Colors.white,
+                strokeWidth: 2,
+              ),
+            ),
           );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          // If logo fails to load, don't show anything (no fallback to assets)
+          return const SizedBox.shrink();
+        },
+      );
+    }
+    
+    // If logo is not a network URL, don't display it (don't use assets)
+    return const SizedBox.shrink();
   }
 
   Widget _buildWatchButton() {
-    // Use video project if available, otherwise use current page project
-    final projectToOpen = _videoProject ?? 
-        (_featuredProjects.isNotEmpty ? _featuredProjects[_currentFeaturedPage] : null);
+    // Use current page project
+    final projectToOpen = _featuredProjects.isNotEmpty 
+        ? _featuredProjects[_currentFeaturedPage] 
+        : null;
     
     return GestureDetector(
       onTap: () {
@@ -771,50 +915,55 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
       final hex = c.replaceAll('0x', '');
       return Color(int.parse(hex, radix: 16));
     }).toList();
-    final bool isAsset = project.isAsset;
     
-    // Use video for first card (index 0), image for others
-    final bool useVideo = index == 0 && 
-        _isVideoInitialized && 
-        _chewieController != null && 
-        _videoPlayerController != null &&
-        _videoPlayerController!.value.isInitialized;
+    // Use hero video (advertisementVideoUrl) for all featured cards in hero section
+    // Check if project has video URL and if it's a video file
+    final bool hasVideoUrl = project.advertisementVideoUrl.isNotEmpty;
+    final bool isVideoFile = hasVideoUrl && (
+      project.advertisementVideoUrl.contains('.mp4') || 
+      project.advertisementVideoUrl.contains('.mov') ||
+      project.advertisementVideoUrl.contains('.webm') ||
+      project.hasVideo == true
+    );
+    
+    // Use video player for current card if video is loaded and available
+    final bool isCurrentPage = _currentFeaturedPage == index;
+    final bool hasVideoLoaded = _videoControllers.containsKey(index) &&
+        _chewieControllers.containsKey(index) &&
+        _videoControllers[index]!.value.isInitialized;
+    
+    // During swipe: ONLY show videos (current + neighbor), never images for video projects.
+    // Not swiping: show ONLY current page video when loaded.
+    final bool isSwipeVisiblePage = _isSwipingFeatured && (index == _swipeFromIndex || index == _swipeToIndex);
+    final bool useVideo = isVideoFile && hasVideoLoaded && (isSwipeVisiblePage || (!_isSwipingFeatured && isCurrentPage));
+    
+    print('🎬 Hero Card $index: hasVideoUrl=$hasVideoUrl, isVideoFile=$isVideoFile, useVideo=$useVideo, currentPage=$_currentFeaturedPage, currentVideoIndex=$_currentVideoIndex, hasVideoLoaded=$hasVideoLoaded, videoUrl=${project.advertisementVideoUrl}');
     
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Background video (for first card) or image
-        useVideo
-            ? Positioned.fill(
-                child: FittedBox(
-                  fit: BoxFit.fill,
-                  alignment: Alignment.topCenter,
-                  child: SizedBox(
-                    width: MediaQuery.of(context).size.width,
-                    height: MediaQuery.of(context).size.height * 0.65,
-                    child: VideoPlayer(_videoPlayerController!),
-                  ),
-                ),
-              )
-            : (isAsset
-                ? Image.asset(
-                    project.image,
-                    fit: BoxFit.cover,
-                    alignment: Alignment.center,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: gradientColors,
-                          ),
-                        ),
-                      );
-                    },
-                  )
-                : Image.network(
-                    project.image,
+        // Background video (for current card with video) - show video when loaded
+        if (useVideo && _videoControllers.containsKey(index))
+          Positioned.fill(
+            child: FittedBox(
+              fit: BoxFit.fill,
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                width: MediaQuery.of(context).size.width,
+                height: MediaQuery.of(context).size.height * 0.65,
+                child: VideoPlayer(_videoControllers[index]!),
+              ),
+            ),
+          )
+        // If video exists but not loaded yet:
+        // - If NOT swiping: show image placeholder (user wants this on initial load)
+        // - If swiping: show NOTHING (user wants only videos during swipe)
+        else if (!_isSwipingFeatured && isCurrentPage && isVideoFile && !hasVideoLoaded)
+          // Video is loading - show image as placeholder
+          Positioned.fill(
+            child: project.projectThumbnailUrl.isNotEmpty
+                ? Image.network(
+                    project.projectThumbnailUrl,
                     fit: BoxFit.cover,
                     alignment: Alignment.center,
                     loadingBuilder: (context, child, loadingProgress) {
@@ -846,7 +995,127 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
                         ),
                       );
                     },
-                  )),
+                  )
+                : project.image.isNotEmpty
+                    ? Image.network(
+                        project.image,
+                        fit: BoxFit.cover,
+                        alignment: Alignment.center,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: gradientColors,
+                              ),
+                            ),
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: gradientColors,
+                              ),
+                            ),
+                          );
+                        },
+                      )
+                    : Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: gradientColors,
+                          ),
+                        ),
+                      ),
+          )
+        // Show image if there's NO video file at all (projects without video)
+        else if (!isVideoFile && project.projectThumbnailUrl.isNotEmpty)
+          Positioned.fill(
+            child: Image.network(
+              project.projectThumbnailUrl,
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: gradientColors,
+                    ),
+                  ),
+                  child: const Center(
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                );
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: gradientColors,
+                    ),
+                  ),
+                );
+              },
+            ),
+          )
+        else if (!isVideoFile && project.image.isNotEmpty)
+          Positioned.fill(
+            child: Image.network(
+              project.image,
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: gradientColors,
+                    ),
+                  ),
+                  child: const Center(
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                );
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: gradientColors,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
         // Color tint overlay (light at top)
         Container(
           decoration: BoxDecoration(
@@ -1188,10 +1457,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Background Image
-              project.isAsset
+              // Background Image - Use projectThumbnailUrl for other sections
+              project.isAsset && project.projectThumbnailUrl.startsWith('assets/')
                   ? Image.asset(
-                      project.image,
+                      project.projectThumbnailUrl.isNotEmpty ? project.projectThumbnailUrl : project.image,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
                         return Container(
@@ -1206,7 +1475,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
                       },
                     )
                   : Image.network(
-                      project.image,
+                      project.projectThumbnailUrl.isNotEmpty ? project.projectThumbnailUrl : project.image,
                       fit: BoxFit.cover,
                       loadingBuilder: (context, child, loadingProgress) {
                         if (loadingProgress == null) return child;
@@ -1380,10 +1649,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Background image
-              project.isAsset
+              // Background image - Use projectThumbnailUrl for continue watching
+              project.isAsset && project.projectThumbnailUrl.startsWith('assets/')
                   ? Image.asset(
-                      project.image,
+                      project.projectThumbnailUrl.isNotEmpty ? project.projectThumbnailUrl : project.image,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
                         return Container(
@@ -1396,7 +1665,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
                       },
                     )
                   : Image.network(
-                      project.image,
+                      project.projectThumbnailUrl.isNotEmpty ? project.projectThumbnailUrl : project.image,
                       fit: BoxFit.cover,
                       loadingBuilder: (context, child, loadingProgress) {
                         if (loadingProgress == null) return child;
@@ -1493,8 +1762,12 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
             child: RankedProjectCard(
               rank: index + 1,
               title: project.title,
-              imageAsset: project.isAsset ? project.image : null,
-              imageUrl: project.isAsset ? null : project.image,
+              imageAsset: (project.isAsset && project.projectThumbnailUrl.startsWith('assets/')) 
+                  ? (project.projectThumbnailUrl.isNotEmpty ? project.projectThumbnailUrl : project.image) 
+                  : null,
+              imageUrl: (project.isAsset && project.projectThumbnailUrl.startsWith('assets/')) 
+                  ? null 
+                  : (project.projectThumbnailUrl.isNotEmpty ? project.projectThumbnailUrl : project.image),
               gradientColors: gradientColors,
               onTap: () {
                 Navigator.push(
@@ -1623,10 +1896,10 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Background image
-              project.isAsset
+              // Background image - Use projectThumbnailUrl for area projects
+              project.isAsset && project.projectThumbnailUrl.startsWith('assets/')
                   ? Image.asset(
-                      project.image,
+                      project.projectThumbnailUrl.isNotEmpty ? project.projectThumbnailUrl : project.image,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
                         return Container(
@@ -1639,7 +1912,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
                       },
                     )
                   : Image.network(
-                      project.image,
+                      project.projectThumbnailUrl.isNotEmpty ? project.projectThumbnailUrl : project.image,
                       fit: BoxFit.cover,
                       loadingBuilder: (context, child, loadingProgress) {
                         if (loadingProgress == null) return child;
@@ -1659,9 +1932,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
                       },
                 errorBuilder: (context, error, stackTrace) {
                   return Container(
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [Color(0xFF4A90A4), Color(0xFF2d6a7a)],
+                        colors: gradientColors,
                       ),
                     ),
                   );
