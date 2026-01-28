@@ -156,9 +156,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
-          physics: isKeyboardVisible 
-              ? const ClampingScrollPhysics() 
-              : const NeverScrollableScrollPhysics(),
+          physics: const ClampingScrollPhysics(),
           padding: EdgeInsets.only(
             bottom: keyboardHeight > 0 ? 20 : 0,
           ),

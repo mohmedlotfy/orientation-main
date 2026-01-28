@@ -49,12 +49,28 @@ class _SearchScreenState extends State<SearchScreen> {
     });
     
     try {
+      print('🔄 Loading search screen data...');
       final results = await Future.wait([
-        _projectApi.getProjects(limit: 100),
-        _homeApi.getDevelopers(),
-        _homeApi.getLatestProjects(),
-        _homeApi.getContinueWatching(),
-        _homeApi.getProjectsByArea('New Cairo'),
+        _projectApi.getProjects(limit: 100).catchError((e) {
+          print('❌ Error loading projects: $e');
+          return <ProjectModel>[];
+        }),
+        _homeApi.getDevelopers().catchError((e) {
+          print('❌ Error loading developers: $e');
+          return <DeveloperModel>[];
+        }),
+        _homeApi.getLatestProjects().catchError((e) {
+          print('❌ Error loading latest projects: $e');
+          return <ProjectModel>[];
+        }),
+        _homeApi.getContinueWatching().catchError((e) {
+          print('❌ Error loading continue watching: $e');
+          return <ProjectModel>[];
+        }),
+        _homeApi.getProjectsByArea('New Cairo').catchError((e) {
+          print('❌ Error loading New Cairo projects: $e');
+          return <ProjectModel>[];
+        }),
       ]);
       
       if (mounted) {
@@ -66,9 +82,24 @@ class _SearchScreenState extends State<SearchScreen> {
           _newCairoProjects = results[4] as List<ProjectModel>;
           _isLoading = false;
         });
+        
+        print('✅ Search data loaded:');
+        print('  - Projects: ${_allProjects.length}');
+        print('  - Latest: ${_latestProjects.length}');
+        print('  - Continue Watching: ${_continueWatching.length}');
+        print('  - New Cairo: ${_newCairoProjects.length}');
+        
+        // Debug: Check image URLs
+        if (_latestProjects.isNotEmpty) {
+          final firstProject = _latestProjects[0];
+          print('📸 Sample project image URLs:');
+          print('  - projectThumbnailUrl: ${firstProject.projectThumbnailUrl}');
+          print('  - image: ${firstProject.image}');
+        }
       }
-    } catch (e) {
-      print('Error loading search data: $e');
+    } catch (e, stackTrace) {
+      print('❌ Error loading search data: $e');
+      print('❌ Stack trace: $stackTrace');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -501,7 +532,7 @@ class _SearchScreenState extends State<SearchScreen> {
             child: _SearchProjectCard(
               title: project.title,
               subtitle: project.subtitle.isNotEmpty ? project.subtitle : project.location,
-              imageUrl: project.isAsset ? null : project.image,
+              imageUrl: project.isAsset ? null : (project.projectThumbnailUrl.isNotEmpty ? project.projectThumbnailUrl : project.image),
               imageAsset: project.isAsset ? project.image : null,
               gradientColors: gradientColors,
               onTap: () {
@@ -664,7 +695,7 @@ class _SearchScreenState extends State<SearchScreen> {
             child: _SearchProjectCard(
               title: project.title,
               subtitle: project.subtitle.isNotEmpty ? project.subtitle : project.location,
-              imageUrl: project.isAsset ? null : project.image,
+              imageUrl: project.isAsset ? null : (project.projectThumbnailUrl.isNotEmpty ? project.projectThumbnailUrl : project.image),
               imageAsset: project.isAsset ? project.image : null,
               gradientColors: gradientColors,
               onTap: () async {
@@ -703,7 +734,7 @@ class _SearchScreenState extends State<SearchScreen> {
             child: _ContinueWatchingCard(
               title: project.title,
               progress: progress,
-              imageUrl: project.isAsset ? null : project.image,
+              imageUrl: project.isAsset ? null : (project.projectThumbnailUrl.isNotEmpty ? project.projectThumbnailUrl : project.image),
               imageAsset: project.isAsset ? project.image : null,
               gradientColors: project.gradientColors.map((c) {
                 final hex = c.replaceAll('0x', '');
@@ -734,7 +765,7 @@ class _SearchScreenState extends State<SearchScreen> {
             padding: EdgeInsets.only(right: index < _newCairoProjects.length - 1 ? 12 : 0),
             child: ProjectCard(
               title: project.title,
-              imageUrl: project.isAsset ? null : project.image,
+              imageUrl: project.isAsset ? null : (project.projectThumbnailUrl.isNotEmpty ? project.projectThumbnailUrl : project.image),
               imageAsset: project.isAsset ? project.image : null,
               gradientColors: gradientColors,
               width: 150,
@@ -819,7 +850,7 @@ class _SearchProjectCard extends StatelessWidget {
                     );
                   },
                 )
-              else if (imageUrl != null)
+              else if (imageUrl != null && imageUrl!.isNotEmpty)
                 Image.network(
                   imageUrl!,
                   fit: BoxFit.cover,
@@ -842,6 +873,7 @@ class _SearchProjectCard extends StatelessWidget {
                     );
                   },
                   errorBuilder: (context, error, stackTrace) {
+                    print('❌ Error loading image: $imageUrl - $error');
                     return Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
@@ -1000,7 +1032,7 @@ class _ContinueWatchingCard extends StatelessWidget {
                       );
                     },
                   )
-                else if (imageUrl != null)
+                else if (imageUrl != null && imageUrl!.isNotEmpty)
                   Image.network(
                     imageUrl!,
                     fit: BoxFit.cover,
@@ -1021,6 +1053,7 @@ class _ContinueWatchingCard extends StatelessWidget {
                       );
                     },
                     errorBuilder: (context, error, stackTrace) {
+                      print('❌ Error loading image: $imageUrl - $error');
                       return Container(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(

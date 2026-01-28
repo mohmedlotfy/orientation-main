@@ -12,6 +12,7 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
   final NewsApi _newsApi = NewsApi();
   bool _isInitialized = false;
+  bool _isChecking = false; // Guard flag to prevent concurrent execution
   Timer? _periodicCheckTimer;
 
   /// Initialize notification service
@@ -190,11 +191,21 @@ class NotificationService {
   void stopPeriodicNewsCheck() {
     _periodicCheckTimer?.cancel();
     _periodicCheckTimer = null;
+    _isChecking = false; // Reset checking flag when stopping
     print('⏹️ Stopped periodic news check');
   }
 
   /// Check for new news from API
   Future<void> _checkForNewNews() async {
+    // Prevent concurrent execution - if a check is already in progress, skip this one
+    if (_isChecking) {
+      print('⏭️ News check already in progress, skipping this call');
+      return;
+    }
+
+    // Set flag to prevent concurrent execution
+    _isChecking = true;
+    
     try {
       if (!_isInitialized) {
         await initialize();
@@ -210,6 +221,9 @@ class NotificationService {
     } catch (e) {
       print('❌ Error in periodic news check: $e');
       // Don't throw - allow periodic check to continue
+    } finally {
+      // Always reset the flag, even if an error occurred
+      _isChecking = false;
     }
   }
 

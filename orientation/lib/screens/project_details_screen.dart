@@ -90,6 +90,8 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     } else if (state == AppLifecycleState.resumed) {
       // When app resumes, restart video if it was initialized
       if (_adVideoController != null && _adVideoController!.value.isInitialized) {
+        // Restore volume state when resuming
+        _adVideoController!.setVolume(_isVideoMuted ? 0.0 : 1.0);
         _adVideoController!.play();
       } else if (_project != null) {
         // Reinitialize video if needed
@@ -253,11 +255,13 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   }
 
   void _toggleVideoMute() {
-    if (_adVideoController != null) {
+    if (_adVideoController != null && _adVideoController!.value.isInitialized) {
       setState(() {
         _isVideoMuted = !_isVideoMuted;
-        _adVideoController!.setVolume(_isVideoMuted ? 0.0 : 1.0);
       });
+      // Set volume after state update to ensure it's applied correctly
+      _adVideoController!.setVolume(_isVideoMuted ? 0.0 : 1.0);
+      print('🔊 Volume changed: ${_isVideoMuted ? "Muted" : "Unmuted"} (${_isVideoMuted ? 0.0 : 1.0})');
     }
   }
 
