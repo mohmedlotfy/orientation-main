@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 import 'clips_screen.dart';
 import 'projects_list_screen.dart';
 import 'episode_player_screen.dart';
@@ -47,6 +48,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   bool _isScriptExpanded = false;
   VideoPlayerController? _adVideoController;
   bool _isVideoMuted = true; // Start muted by default
+  bool _isAdVideoVisible = true; // Track ad video visibility for pause/resume
 
   @override
   void initState() {
@@ -634,8 +636,25 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
     final projectImage = _project?.image ?? '';
     final isAsset = _project?.isAsset ?? false;
 
-    return SizedBox(
-      height: 280,
+    return VisibilityDetector(
+      key: const Key('project_details_ad_video'),
+      onVisibilityChanged: (info) {
+        final isVisible = info.visibleFraction >= 0.5;
+        if (isVisible != _isAdVideoVisible) {
+          _isAdVideoVisible = isVisible;
+          if (_adVideoController != null && _adVideoController!.value.isInitialized) {
+            if (isVisible) {
+              // Resume video from current position
+              _adVideoController!.play();
+            } else {
+              // Pause video (position is preserved automatically)
+              _adVideoController!.pause();
+            }
+          }
+        }
+      },
+      child: SizedBox(
+        height: 280,
       child: Stack(
         children: [
           // Background video with tap detector
@@ -809,6 +828,7 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
             ),
           ),
         ],
+      ),
       ),
     );
   }

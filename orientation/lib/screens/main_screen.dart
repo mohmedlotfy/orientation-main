@@ -96,6 +96,8 @@ class _MainScreenState extends State<MainScreen> {
               if (homeState != null) {
                 // Call refresh method using dynamic to avoid type checking issues
                 (homeState as dynamic).refreshContinueWatching();
+                // Resume home videos when returning to Home tab
+                (homeState as dynamic).resumeVideos();
               }
             }
             
@@ -103,6 +105,14 @@ class _MainScreenState extends State<MainScreen> {
               _currentIndex = index;
             });
             return;
+          }
+          
+          // Pause home videos when leaving Home tab
+          if (_currentIndex == 0) {
+            final homeState = _homeKey.currentState;
+            if (homeState != null) {
+              (homeState as dynamic).pauseVideos();
+            }
           }
           
           // Clips, News, or Account tabs - require auth

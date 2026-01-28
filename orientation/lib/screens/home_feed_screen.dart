@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 import '../widgets/project_card.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/skeleton_loader.dart';
@@ -53,6 +54,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
   bool _isSwipingFeatured = false;
   int _swipeFromIndex = 0;
   int _swipeToIndex = 0;
+  bool _isHeroVisible = true; // Track hero section visibility for pause/resume
 
   static const Color brandRed = Color(0xFFE50914);
 
@@ -515,6 +517,22 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
     super.dispose();
   }
 
+  /// Pause all videos (called when switching away from Home tab)
+  void pauseVideos() {
+    for (var controller in _videoControllers.values) {
+      if (controller.value.isPlaying) {
+        controller.pause();
+      }
+    }
+  }
+
+  /// Resume video playback (called when switching back to Home tab)
+  void resumeVideos() {
+    if (_isHeroVisible && _videoControllers.containsKey(_currentVideoIndex)) {
+      _videoControllers[_currentVideoIndex]?.play();
+    }
+  }
+
   void scrollToUpcomingProjects() {
     // Scroll to upcoming projects section using the key
     Future.delayed(const Duration(milliseconds: 100), () {
@@ -736,8 +754,27 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
 
   // Hero section with overlaying AppBar and Filters on Carousel
   Widget _buildHeroSection() {
-    return SizedBox(
-      height: MediaQuery.of(context).size.height * 0.65, // 65% of screen height
+    return VisibilityDetector(
+      key: const Key('home_hero_video'),
+      onVisibilityChanged: (info) {
+        final isVisible = info.visibleFraction >= 0.5;
+        if (isVisible != _isHeroVisible) {
+          _isHeroVisible = isVisible;
+          if (isVisible) {
+            // Resume video from current position
+            if (_videoControllers.containsKey(_currentVideoIndex)) {
+              _videoControllers[_currentVideoIndex]?.play();
+            }
+          } else {
+            // Pause video (position is preserved automatically)
+            if (_videoControllers.containsKey(_currentVideoIndex)) {
+              _videoControllers[_currentVideoIndex]?.pause();
+            }
+          }
+        }
+      },
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.65, // 65% of screen height
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -810,6 +847,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
             ),
           ),
         ],
+      ),
       ),
     );
   }
