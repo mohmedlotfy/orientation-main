@@ -5,9 +5,12 @@ import '../../models/project_model.dart';
 import '../../models/episode_model.dart';
 import '../../models/clip_model.dart';
 import '../../models/pdf_file_model.dart';
+import '../../models/watch_history_model.dart';
+import 'watch_history_api.dart';
 
 class ProjectApi {
   final DioClient _dioClient = DioClient();
+  final WatchHistoryApi _watchHistoryApi = WatchHistoryApi();
 
   ProjectApi() {
     _dioClient.init();
@@ -49,6 +52,28 @@ class ProjectApi {
     return v.toString();
   }
 
+  static const String _episodeContentPrefix = 'episode__';
+
+  /// Creates a stable, URL-safe contentId for Watch History that still encodes projectId + episodeId.
+  /// Example: episode__<projectId>__<episodeId>
+  static String makeEpisodeContentId(String projectId, String episodeId) {
+    return '$_episodeContentPrefix$projectId\_\_$episodeId';
+  }
+
+  static ({String projectId, String episodeId})? parseEpisodeContentId(String contentId) {
+    if (!contentId.startsWith(_episodeContentPrefix)) return null;
+    final rest = contentId.substring(_episodeContentPrefix.length);
+    final parts = rest.split('__');
+    if (parts.length != 2) return null;
+    return (projectId: parts[0], episodeId: parts[1]);
+  }
+
+  Future<bool> _hasAuthToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+    return token != null && token.isNotEmpty;
+  }
+
   /// Uses local cache (updated on save/unsave). PATCH /projects/:id/save-project does not return savedProjects.
   Future<bool> isProjectSaved(String projectId) async {
     final prefs = await SharedPreferences.getInstance();
@@ -76,8 +101,80 @@ class ProjectApi {
     await prefs.setStringList('saved_projects', ids);
   }
 
-  /// Uses local cache of saved ids; fetches each project via GET /projects/:id
+  /// Get saved projects from user data (GET /users/:id or /auth/profile)
+  /// Falls back to local cache if backend unavailable
   Future<List<ProjectModel>> getSavedProjects() async {
+    try {
+      // Try to get from backend user data first
+      if (await _hasAuthToken()) {
+        final prefs = await SharedPreferences.getInstance();
+        final userId = prefs.getString('user_id');
+        
+        if (userId != null && userId.isNotEmpty) {
+          print('📡 Fetching saved projects from user data (userId: $userId)...');
+          try {
+            // Try GET /users/:id first
+            final response = await _dioClient.dio.get('/users/$userId');
+            final userData = response.data as Map<String, dynamic>?;
+            
+            if (userData != null) {
+              final savedProjectsIds = userData['savedProjects'];
+              if (savedProjectsIds is List) {
+                final ids = savedProjectsIds.map((e) => e.toString()).where((id) => id.isNotEmpty).toList();
+                print('✅ Found ${ids.length} saved project IDs from user data');
+                
+                // Fetch each project
+                final out = <ProjectModel>[];
+                for (final id in ids) {
+                  final p = await getProjectById(id);
+                  if (p != null) out.add(p);
+                }
+                
+                // Update local cache
+                await prefs.setStringList('saved_projects', ids);
+                
+                print('✅ Loaded ${out.length} saved projects from backend');
+                return out;
+              }
+            }
+          } catch (e) {
+            print('⚠️ Failed to get saved projects from /users/:id, trying /auth/profile...');
+            // Try /auth/profile as fallback
+            try {
+              final response = await _dioClient.dio.get('/auth/profile');
+              final userData = response.data as Map<String, dynamic>?;
+              
+              if (userData != null) {
+                final savedProjectsIds = userData['savedProjects'];
+                if (savedProjectsIds is List) {
+                  final ids = savedProjectsIds.map((e) => e.toString()).where((id) => id.isNotEmpty).toList();
+                  print('✅ Found ${ids.length} saved project IDs from /auth/profile');
+                  
+                  final out = <ProjectModel>[];
+                  for (final id in ids) {
+                    final p = await getProjectById(id);
+                    if (p != null) out.add(p);
+                  }
+                  
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setStringList('saved_projects', ids);
+                  
+                  print('✅ Loaded ${out.length} saved projects from /auth/profile');
+                  return out;
+                }
+              }
+            } catch (e2) {
+              print('⚠️ /auth/profile also failed: $e2');
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print('⚠️ Error fetching saved projects from backend: $e');
+    }
+    
+    // Fallback to local cache
+    print('📦 Using local cache for saved projects...');
     final prefs = await SharedPreferences.getInstance();
     final ids = prefs.getStringList('saved_projects') ?? [];
     final out = <ProjectModel>[];
@@ -85,22 +182,154 @@ class ProjectApi {
       final p = await getProjectById(id);
       if (p != null) out.add(p);
     }
+    print('✅ Loaded ${out.length} saved projects from local cache');
     return out;
   }
 
-  /// Progress stored locally; no backend. GET /projects/:id increments view on each fetch.
+  /// Progress stored locally; still used as offline fallback.
   Future<void> trackWatching(String projectId, String episodeId, double progress) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('watch_progress_${projectId}_$episodeId', progress);
   }
 
   Future<double> getWatchingProgress(String projectId, String episodeId) async {
+    // Try backend watch-history first (if logged in), then fall back to local cache.
+    try {
+      if (await _hasAuthToken()) {
+        final contentId = makeEpisodeContentId(projectId, episodeId);
+        final w = await _watchHistoryApi.getContentProgress(contentId);
+        if (w != null && w.duration > 0) {
+          final frac = (w.currentTime / w.duration).clamp(0.0, 1.0);
+          // Cache locally as well (for faster UI + offline fallback)
+          await trackWatching(projectId, episodeId, frac);
+          return frac;
+        }
+      }
+    } catch (_) {
+      // ignore, fallback to local
+    }
     final prefs = await SharedPreferences.getInstance();
     return prefs.getDouble('watch_progress_${projectId}_$episodeId') ?? 0.0;
   }
 
-  /// Continue watching from local progress; fetches projects via GET /projects/:id
+  /// Update watch progress on backend (Watch History) and keep local cache in sync.
+  Future<void> updateEpisodeWatchProgress({
+    required String projectId,
+    required EpisodeModel episode,
+    required String projectTitle,
+    required double currentTimeSeconds,
+    required double durationSeconds,
+  }) async {
+    final frac = durationSeconds > 0 ? (currentTimeSeconds / durationSeconds).clamp(0.0, 1.0) : 0.0;
+    await trackWatching(projectId, episode.id, frac);
+
+    try {
+      if (!await _hasAuthToken()) return;
+      final contentId = makeEpisodeContentId(projectId, episode.id);
+      await _watchHistoryApi.upsertProgress(
+        contentId: contentId,
+        contentTitle: projectTitle.isNotEmpty ? projectTitle : (episode.title.isNotEmpty ? episode.title : 'Episode ${episode.episodeNumber}'),
+        contentThumbnail: episode.thumbnail.isNotEmpty ? episode.thumbnail : null,
+        currentTimeSeconds: currentTimeSeconds,
+        durationSeconds: durationSeconds,
+        contentType: 'episode',
+        episode: episode.episodeNumber,
+      );
+    } catch (_) {
+      // Ignore backend sync errors; local cache still works.
+    }
+  }
+
+  /// Returns the last watched episodeId for a given project using backend watch-history if available.
+  Future<String?> getLastWatchedEpisodeId(String projectId) async {
+    try {
+      if (!await _hasAuthToken()) return null;
+      final items = await _watchHistoryApi.getContinueWatching(limit: 100);
+      WatchHistoryModel? best;
+      for (final w in items) {
+        final parsed = parseEpisodeContentId(w.contentId);
+        if (parsed == null) continue;
+        if (parsed.projectId != projectId) continue;
+        if (best == null || w.lastWatchedAt.isAfter(best.lastWatchedAt)) {
+          best = w;
+        }
+      }
+      return best == null ? null : parseEpisodeContentId(best.contentId)?.episodeId;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Continue watching list:
+  /// - If logged in: derived from /watch-history/continue-watching
+  /// - Otherwise: derived from local progress cache
   Future<List<ProjectModel>> getContinueWatchingProjects() async {
+    // Prefer backend watch history if logged in.
+    try {
+      if (await _hasAuthToken()) {
+        print('📺 Fetching continue watching from backend...');
+        final items = await _watchHistoryApi.getContinueWatching(limit: 100);
+        print('📺 Got ${items.length} items from watch history API');
+        
+        final Map<String, ({double progress, DateTime lastWatchedAt})> byProject = {};
+
+        for (final w in items) {
+          final parsed = parseEpisodeContentId(w.contentId);
+          if (parsed == null) {
+            print('⚠️ Could not parse contentId: ${w.contentId}');
+            continue;
+          }
+          final pid = parsed.projectId;
+          final frac = (w.progressPercentage / 100.0).clamp(0.0, 1.0);
+          if (frac <= 0 || frac >= 0.9) {
+            print('⏭️ Skipping ${w.contentTitle}: progress=$frac (${w.progressPercentage}%)');
+            continue;
+          }
+
+          final existing = byProject[pid];
+          if (existing == null || w.lastWatchedAt.isAfter(existing.lastWatchedAt)) {
+            byProject[pid] = (progress: frac, lastWatchedAt: w.lastWatchedAt);
+            print('✅ Added project $pid: progress=${(frac * 100).toStringAsFixed(1)}%');
+          }
+        }
+
+        print('📊 Found ${byProject.length} unique projects with progress');
+
+        final out = <ProjectModel>[];
+        for (final e in byProject.entries) {
+          final p = await getProjectById(e.key);
+          if (p != null) {
+            // Debug: Print image fields for continue watching projects
+            if (out.length < 3) {
+              print('📸 Continue watching project ${out.length} image fields:');
+              print('   projectThumbnailUrl: "${p.projectThumbnailUrl}"');
+              print('   image: "${p.image}"');
+              print('   logo: "${p.logo}"');
+            }
+            out.add(p.copyWith(watchProgress: e.value.progress));
+          } else {
+            print('⚠️ Project ${e.key} not found');
+          }
+        }
+
+        out.sort((a, b) {
+          final aT = byProject[a.id]?.lastWatchedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final bT = byProject[b.id]?.lastWatchedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return bT.compareTo(aT);
+        });
+
+        print('✅ Returning ${out.length} continue watching projects');
+        return out;
+      } else {
+        print('ℹ️ User not logged in, using local cache for continue watching');
+      }
+    } catch (e) {
+      print('❌ Error fetching continue watching from backend: $e');
+      print('📦 Falling back to local cache...');
+      // fallback below
+    }
+
+    // Local-only fallback (old behavior)
     final prefs = await SharedPreferences.getInstance();
     final keys = prefs.getKeys().where((k) => k.startsWith('watch_progress_'));
     final Map<String, double> byProject = {};
@@ -172,12 +401,57 @@ class ProjectApi {
   }
 
   /// GET /reels/saved — Get all reels saved by the current user
+  /// Falls back to user data (savedReels array) if endpoint unavailable
   Future<List<ClipModel>> getSavedReels() async {
     try {
-      final response = await _dioClient.dio.get('/reels/saved');
-      final list = response.data is List ? response.data as List : <dynamic>[];
-      return list.map((e) => ClipModel.fromJson(e as Map<String, dynamic>)).toList();
-    } on DioException catch (_) {
+      // Try GET /reels/saved endpoint first
+      if (await _hasAuthToken()) {
+        print('📡 Fetching saved reels from /reels/saved...');
+        try {
+          final response = await _dioClient.dio.get('/reels/saved');
+          final list = response.data is List ? response.data as List : <dynamic>[];
+          final reels = list.map((e) => ClipModel.fromJson(e as Map<String, dynamic>)).toList();
+          print('✅ Loaded ${reels.length} saved reels from /reels/saved');
+          return reels;
+        } catch (e) {
+          print('⚠️ /reels/saved failed, trying user data...');
+        }
+        
+        // Fallback: Get from user data
+        final prefs = await SharedPreferences.getInstance();
+        final userId = prefs.getString('user_id');
+        
+        if (userId != null && userId.isNotEmpty) {
+          try {
+            final response = await _dioClient.dio.get('/users/$userId');
+            final userData = response.data as Map<String, dynamic>?;
+            
+            if (userData != null) {
+              final savedReelsIds = userData['savedReels'];
+              if (savedReelsIds is List) {
+                final ids = savedReelsIds.map((e) => e.toString()).where((id) => id.isNotEmpty).toList();
+                print('✅ Found ${ids.length} saved reel IDs from user data');
+                
+                // Fetch each reel via GET /reels/:id or GET /reels and filter
+                final allReelsResponse = await _dioClient.dio.get('/reels');
+                final allReelsList = allReelsResponse.data is List ? allReelsResponse.data as List : <dynamic>[];
+                final allReels = allReelsList.map((e) => ClipModel.fromJson(e as Map<String, dynamic>)).toList();
+                
+                final savedReels = allReels.where((r) => ids.contains(r.id)).toList();
+                print('✅ Loaded ${savedReels.length} saved reels from user data');
+                return savedReels;
+              }
+            }
+          } catch (e) {
+            print('⚠️ Failed to get saved reels from user data: $e');
+          }
+        }
+      }
+      
+      // Return empty list if not authenticated or all methods failed
+      return [];
+    } on DioException catch (e) {
+      print('❌ Error getting saved reels: ${e.message}');
       return [];
     }
   }
@@ -222,37 +496,45 @@ class ProjectApi {
     }
   }
 
-  /// GET /projects?developerId=
+  /// GET /projects/trending?limit= (backend doesn't have /projects?developerId=, use trending)
   Future<List<ProjectModel>> getDeveloperProjects(String developerId) async {
     try {
-      final response = await _dioClient.dio.get('/projects', queryParameters: {'developerId': developerId});
+      // Backend doesn't have /projects?developerId=, use trending and filter client-side
+      final response = await _dioClient.dio.get('/projects/trending', queryParameters: {'limit': '100'});
       final list = response.data is List ? response.data as List : <dynamic>[];
-      return list.map((e) => ProjectModel.fromJson(e as Map<String, dynamic>)).toList();
-    } on DioException catch (_) {
+      final allProjects = list.map((e) => ProjectModel.fromJson(e as Map<String, dynamic>)).toList();
+      // Filter by developerId client-side
+      return allProjects.where((p) => p.developerId == developerId).toList();
+    } on DioException catch (e) {
+      print('❌ Error getting developer projects: ${e.message}');
       return [];
     }
   }
 
-  /// GET /projects with optional limit and excludeId (client-side filter)
+  /// GET /projects/trending?limit= (backend doesn't have general /projects endpoint)
   Future<List<ProjectModel>> getProjects({int limit = 20, String? excludeId}) async {
     try {
-      final response = await _dioClient.dio.get('/projects', queryParameters: {'limit': limit});
+      // Backend doesn't have /projects with query params, use trending instead
+      final response = await _dioClient.dio.get('/projects/trending', queryParameters: {'limit': limit.toString()});
       final list = response.data is List ? response.data as List : <dynamic>[];
       var items = list.map((e) => ProjectModel.fromJson(e as Map<String, dynamic>)).toList();
       if (excludeId != null) items = items.where((p) => p.id != excludeId).toList();
       return items;
-    } on DioException catch (_) {
+    } on DioException catch (e) {
+      print('❌ Error getting projects: ${e.message}');
       return [];
     }
   }
 
-  /// GET /projects?location= — for “projects by area”
+  /// GET /projects/location?location= — for "projects by area"
   Future<List<ProjectModel>> getProjectsByArea(String location) async {
     try {
-      final response = await _dioClient.dio.get('/projects', queryParameters: {'location': location, 'limit': 20});
+      // Use correct endpoint: GET /projects/location?location=
+      final response = await _dioClient.dio.get('/projects/location', queryParameters: {'location': location});
       final list = response.data is List ? response.data as List : <dynamic>[];
       return list.map((e) => ProjectModel.fromJson(e as Map<String, dynamic>)).toList();
-    } on DioException catch (_) {
+    } on DioException catch (e) {
+      print('❌ Error getting projects by area ($location): ${e.message}');
       return [];
     }
   }
@@ -279,9 +561,24 @@ class ProjectApi {
   /// Inventory has project (not projectId) and inventoryUrl (not fileUrl).
   Future<String?> getInventoryUrl(String projectId) async {
     try {
-      final response = await _dioClient.dio.get('/files/get/inventory');
-      final data = response.data as Map<String, dynamic>?;
-      final list = (data?['inventories'] as List?) ?? <dynamic>[];
+      // New route (docs): GET /files/inventory -> List
+      Response response;
+      try {
+        response = await _dioClient.dio.get('/files/inventory');
+      } on DioException catch (e) {
+        // Backwards-compatible fallback
+        if (e.response?.statusCode == 404) {
+          response = await _dioClient.dio.get('/files/get/inventory');
+        } else {
+          rethrow;
+        }
+      }
+
+      final dynamic raw = response.data;
+      final List<dynamic> list = raw is List
+          ? raw
+          : (raw is Map<String, dynamic> ? ((raw['inventories'] as List?) ?? <dynamic>[]) : <dynamic>[]);
+
       for (final e in list) {
         final m = e as Map<String, dynamic>?;
         if (m == null) continue;
@@ -301,9 +598,21 @@ class ProjectApi {
   /// File has project (not projectId) and pdfUrl (not fileUrl).
   Future<List<PdfFileModel>> getPdfFiles(String projectId) async {
     try {
-      final response = await _dioClient.dio.get('/files/get/pdf');
-      final data = response.data as Map<String, dynamic>?;
-      final list = (data?['pdfs'] as List?) ?? <dynamic>[];
+      // New route (docs): GET /files/pdf -> List
+      Response response;
+      try {
+        response = await _dioClient.dio.get('/files/pdf');
+      } on DioException catch (e) {
+        // Backwards-compatible fallback
+        if (e.response?.statusCode == 404) {
+          response = await _dioClient.dio.get('/files/get/pdf');
+        } else {
+          rethrow;
+        }
+      }
+
+      final dynamic raw = response.data;
+      final List<dynamic> list = raw is List ? raw : ((raw as Map?)?['pdfs'] as List? ?? <dynamic>[]);
       return list
           .map((e) => e as Map<String, dynamic>)
           .where((m) => (_resolveId(m['project']) ?? _resolveId(m['projectId'])) == projectId)
@@ -324,7 +633,16 @@ class ProjectApi {
       if (filePath != null && filePath.isNotEmpty) {
         form['inventory'] = await MultipartFile.fromFile(filePath);
       }
-      final res = await _dioClient.dio.patch('/files/update/inventory/$inventoryId', data: FormData.fromMap(form));
+      Response res;
+      try {
+        res = await _dioClient.dio.patch('/files/inventory/$inventoryId', data: FormData.fromMap(form));
+      } on DioException catch (e) {
+        if (e.response?.statusCode == 404) {
+          res = await _dioClient.dio.patch('/files/update/inventory/$inventoryId', data: FormData.fromMap(form));
+        } else {
+          rethrow;
+        }
+      }
       return res.statusCode == 200 || res.statusCode == 201;
     } catch (_) {
       return false;
@@ -341,7 +659,16 @@ class ProjectApi {
       if (filePath != null && filePath.isNotEmpty) {
         form['PDF'] = await MultipartFile.fromFile(filePath);
       }
-      final res = await _dioClient.dio.patch('/files/update/pdf/$pdfId', data: FormData.fromMap(form));
+      Response res;
+      try {
+        res = await _dioClient.dio.patch('/files/pdf/$pdfId', data: FormData.fromMap(form));
+      } on DioException catch (e) {
+        if (e.response?.statusCode == 404) {
+          res = await _dioClient.dio.patch('/files/update/pdf/$pdfId', data: FormData.fromMap(form));
+        } else {
+          rethrow;
+        }
+      }
       return res.statusCode == 200 || res.statusCode == 201;
     } catch (_) {
       return false;
@@ -351,7 +678,16 @@ class ProjectApi {
   /// DELETE /files/delete/inventory/:id — Delete an inventory file
   Future<bool> deleteInventoryFile(String inventoryId) async {
     try {
-      final res = await _dioClient.dio.delete('/files/delete/inventory/$inventoryId');
+      Response res;
+      try {
+        res = await _dioClient.dio.delete('/files/inventory/$inventoryId');
+      } on DioException catch (e) {
+        if (e.response?.statusCode == 404) {
+          res = await _dioClient.dio.delete('/files/delete/inventory/$inventoryId');
+        } else {
+          rethrow;
+        }
+      }
       return res.statusCode == 200 || res.statusCode == 204;
     } catch (_) {
       return false;
@@ -361,7 +697,16 @@ class ProjectApi {
   /// DELETE /files/delete/pdf/:id — Delete a PDF file
   Future<bool> deletePdfFile(String pdfId) async {
     try {
-      final res = await _dioClient.dio.delete('/files/delete/pdf/$pdfId');
+      Response res;
+      try {
+        res = await _dioClient.dio.delete('/files/pdf/$pdfId');
+      } on DioException catch (e) {
+        if (e.response?.statusCode == 404) {
+          res = await _dioClient.dio.delete('/files/delete/pdf/$pdfId');
+        } else {
+          rethrow;
+        }
+      }
       return res.statusCode == 200 || res.statusCode == 204;
     } catch (_) {
       return false;

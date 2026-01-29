@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/project_model.dart';
+import '../models/clip_model.dart';
 import '../services/api/project_api.dart';
 import '../utils/auth_helper.dart';
 import 'project_details_screen.dart';
@@ -12,20 +13,32 @@ class SavedScreen extends StatefulWidget {
   State<SavedScreen> createState() => _SavedScreenState();
 }
 
-class _SavedScreenState extends State<SavedScreen> {
+class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStateMixin {
   final ProjectApi _projectApi = ProjectApi();
+  late TabController _tabController;
+  
   List<ProjectModel> _savedProjects = [];
-  bool _isLoading = true;
+  List<ClipModel> _savedReels = [];
+  bool _isLoadingProjects = true;
+  bool _isLoadingReels = true;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _loadSavedProjects();
+    _loadSavedReels();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadSavedProjects() async {
     setState(() {
-      _isLoading = true;
+      _isLoadingProjects = true;
     });
 
     try {
@@ -33,16 +46,45 @@ class _SavedScreenState extends State<SavedScreen> {
       if (mounted) {
         setState(() {
           _savedProjects = projects;
-          _isLoading = false;
+          _isLoadingProjects = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _isLoading = false;
+          _isLoadingProjects = false;
         });
       }
     }
+  }
+
+  Future<void> _loadSavedReels() async {
+    setState(() {
+      _isLoadingReels = true;
+    });
+
+    try {
+      final reels = await _projectApi.getSavedReels();
+      if (mounted) {
+        setState(() {
+          _savedReels = reels;
+          _isLoadingReels = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingReels = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _refreshAll() async {
+    await Future.wait([
+      _loadSavedProjects(),
+      _loadSavedReels(),
+    ]);
   }
 
   Future<void> _removeFromSaved(ProjectModel project) async {
@@ -108,17 +150,35 @@ class _SavedScreenState extends State<SavedScreen> {
           children: [
             // App bar
             _buildAppBar(context),
-            // List
+            // Tabs
+            _buildTabs(),
+            // Content
             Expanded(
-              child: _isLoading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: Color(0xFFE50914),
-                      ),
-                    )
-                  : _savedProjects.isEmpty
-                      ? _buildEmptyState()
-                      : _buildSavedList(),
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  // Projects Tab
+                  _isLoadingProjects
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            color: Color(0xFFE50914),
+                          ),
+                        )
+                      : _savedProjects.isEmpty
+                          ? _buildEmptyState('No Saved Projects', 'Projects you save will appear here for easy access')
+                          : _buildSavedProjectsList(),
+                  // Reels Tab
+                  _isLoadingReels
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            color: Color(0xFFE50914),
+                          ),
+                        )
+                      : _savedReels.isEmpty
+                          ? _buildEmptyState('No Saved Reels', 'Reels you save will appear here for easy access')
+                          : _buildSavedReelsList(),
+                ],
+              ),
             ),
           ],
         ),
@@ -157,43 +217,77 @@ class _SavedScreenState extends State<SavedScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.bookmark_outline,
-            color: Colors.white.withOpacity(0.3),
-            size: 80,
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'No Saved Projects',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 40),
-            child: Text(
-              'Projects you save will appear here for easy access',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.4),
-                fontSize: 14,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
+  Widget _buildTabs() {
+    return Container(
+      color: Colors.black,
+      child: TabBar(
+        controller: _tabController,
+        indicatorColor: const Color(0xFFE50914),
+        labelColor: Colors.white,
+        unselectedLabelColor: Colors.white.withOpacity(0.5),
+        labelStyle: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
+        unselectedLabelStyle: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.normal,
+        ),
+        tabs: const [
+          Tab(text: 'Projects'),
+          Tab(text: 'Reels'),
         ],
       ),
     );
   }
 
-  Widget _buildSavedList() {
+  Widget _buildEmptyState(String title, String message) {
+    return RefreshIndicator(
+      onRefresh: _refreshAll,
+      color: const Color(0xFFE50914),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.6,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.bookmark_outline,
+                  color: Colors.white.withOpacity(0.3),
+                  size: 80,
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Text(
+                    message,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.4),
+                      fontSize: 14,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSavedProjectsList() {
     return RefreshIndicator(
       onRefresh: _loadSavedProjects,
       color: const Color(0xFFE50914),
@@ -215,13 +309,70 @@ class _SavedScreenState extends State<SavedScreen> {
                     projectId: project.id,
                   ),
                 ),
-              ).then((_) => _loadSavedProjects()); // Refresh on return
+              ).then((_) => _refreshAll()); // Refresh on return
             },
             onRemove: () => _removeFromSaved(project),
           );
         },
       ),
     );
+  }
+
+  Widget _buildSavedReelsList() {
+    return RefreshIndicator(
+      onRefresh: _loadSavedReels,
+      color: const Color(0xFFE50914),
+      child: GridView.builder(
+        padding: const EdgeInsets.all(16),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 0.75,
+        ),
+        itemCount: _savedReels.length,
+        itemBuilder: (context, index) {
+          final reel = _savedReels[index];
+          return _SavedReelItem(
+            reel: reel,
+            onTap: () async {
+              final isAuth = await AuthHelper.requireAuth(context);
+              if (!isAuth) return;
+              
+              // Navigate to project details or reel player
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProjectDetailsScreen(
+                    projectId: reel.projectId,
+                  ),
+                ),
+              ).then((_) => _refreshAll());
+            },
+            onRemove: () => _removeFromSavedReel(reel),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _removeFromSavedReel(ClipModel reel) async {
+    final isAuth = await AuthHelper.requireAuth(context);
+    if (!isAuth) return;
+    
+    // Optimistic update
+    setState(() {
+      _savedReels.removeWhere((r) => r.id == reel.id);
+    });
+
+    try {
+      await _projectApi.unsaveReel(reel.id);
+      _showSnackBar('Removed from saved');
+    } catch (e) {
+      // Revert on error
+      _loadSavedReels();
+      _showSnackBar('Error removing reel', isError: true);
+    }
   }
 }
 
@@ -379,6 +530,135 @@ class _SavedProjectItem extends StatelessWidget {
           fontStyle: FontStyle.italic,
         ),
         textAlign: TextAlign.center,
+      ),
+    );
+  }
+}
+
+class _SavedReelItem extends StatelessWidget {
+  final ClipModel reel;
+  final VoidCallback? onTap;
+  final VoidCallback? onRemove;
+
+  const _SavedReelItem({
+    required this.reel,
+    this.onTap,
+    this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Stack(
+        children: [
+          // Thumbnail
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: Colors.grey.shade900,
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: reel.thumbnail.isNotEmpty
+                  ? (reel.isAsset
+                      ? Image.asset(
+                          reel.thumbnail,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                        )
+                      : Image.network(
+                          reel.thumbnail,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                        ))
+                  : _buildPlaceholder(),
+            ),
+          ),
+          // Play icon overlay
+          Positioned.fill(
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.5),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.play_arrow,
+                  color: Colors.white,
+                  size: 32,
+                ),
+              ),
+            ),
+          ),
+          // Remove button
+          Positioned(
+            top: 8,
+            right: 8,
+            child: GestureDetector(
+              onTap: onRemove,
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.6),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.favorite,
+                  color: Color(0xFFE50914),
+                  size: 20,
+                ),
+              ),
+            ),
+          ),
+          // Title overlay
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.8),
+                    Colors.transparent,
+                  ],
+                ),
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(12),
+                  bottomRight: Radius.circular(12),
+                ),
+              ),
+              child: Text(
+                reel.title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlaceholder() {
+    return Container(
+      color: Colors.grey.shade900,
+      child: Center(
+        child: Icon(
+          Icons.video_library_outlined,
+          color: Colors.white.withOpacity(0.3),
+          size: 40,
+        ),
       ),
     );
   }

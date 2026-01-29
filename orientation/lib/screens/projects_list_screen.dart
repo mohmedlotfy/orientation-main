@@ -41,7 +41,24 @@ class _ProjectsListScreenState extends State<ProjectsListScreen> {
 
   Future<void> _loadProjects() async {
     try {
-      final projects = await _homeApi.getLatestProjects();
+      List<ProjectModel> projects;
+      
+      // Load projects based on title/section
+      if (widget.title.contains('Northcoast') || widget.title.contains('North Coast')) {
+        projects = await _homeApi.getProjectsByArea('North Coast');
+      } else if (widget.title.contains('New Cairo')) {
+        projects = await _homeApi.getProjectsByArea('New Cairo');
+      } else if (widget.title.contains('October')) {
+        projects = await _homeApi.getProjectsByArea('October');
+      } else if (widget.title.contains('Top 10')) {
+        projects = await _homeApi.getTop10Projects();
+      } else if (widget.title.contains('Upcoming')) {
+        projects = await _homeApi.getUpcomingProjects();
+      } else {
+        // Default: latest projects
+        projects = await _homeApi.getLatestProjects();
+      }
+      
       // Load saved status for each project
       final savedStatus = <String, bool>{};
       for (final project in projects) {
@@ -55,6 +72,7 @@ class _ProjectsListScreenState extends State<ProjectsListScreen> {
         });
       }
     } catch (e) {
+      print('❌ Error loading projects: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -342,12 +360,40 @@ ${project.script ?? 'Check out this amazing project!'}
         
         final isSaved = _savedProjects[project.id] ?? false;
         
+        // Use the SAME logic as home screen
+        // Priority: projectThumbnailUrl > logo > image (if not video URL)
+        // Check if image is a video URL (ends with .mp4, .mov, .avi, etc. or contains 'video')
+        final isImageVideo = project.image.toLowerCase().contains('.mp4') || 
+                            project.image.toLowerCase().contains('.mov') || 
+                            project.image.toLowerCase().contains('.avi') ||
+                            project.image.toLowerCase().contains('video');
+        
+        final fallbackImage = (!isImageVideo && project.image.isNotEmpty) ? project.image : 
+                             (project.logo != null && project.logo!.isNotEmpty) ? project.logo! : null;
+        
+        final imageUrl = (project.isAsset && project.projectThumbnailUrl.startsWith('assets/')) 
+            ? null 
+            : (project.projectThumbnailUrl.isNotEmpty ? project.projectThumbnailUrl : fallbackImage);
+        final imageAsset = (project.isAsset && project.projectThumbnailUrl.startsWith('assets/')) 
+            ? (project.projectThumbnailUrl.isNotEmpty ? project.projectThumbnailUrl : 
+               (fallbackImage != null && fallbackImage.startsWith('assets/') ? fallbackImage : null))
+            : null;
+        
+        print('📋 ProjectsListScreen: Building item for "${project.title}" (id: ${project.id})');
+        print('   projectThumbnailUrl: "${project.projectThumbnailUrl}"');
+        print('   image: "${project.image}"');
+        print('   isAsset: ${project.isAsset}, startsWith assets/: ${project.projectThumbnailUrl.startsWith('assets/')}');
+        print('   Using imageAsset: $imageAsset');
+        print('   Using imageUrl: $imageUrl');
+        
         return ProjectListItem(
           projectId: project.id,
           developerName: project.developerName,
           projectName: project.title,
           gradientColors: gradientColors,
           isSaved: isSaved,
+          imageUrl: imageUrl,
+          imageAsset: imageAsset,
           onTap: () {
             Navigator.push(
               context,

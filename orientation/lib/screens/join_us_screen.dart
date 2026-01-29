@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/api/admin_api.dart';
+import '../services/api/developer_api.dart';
 
 class JoinUsScreen extends StatefulWidget {
   const JoinUsScreen({super.key});
@@ -9,23 +9,25 @@ class JoinUsScreen extends StatefulWidget {
 }
 
 class _JoinUsScreenState extends State<JoinUsScreen> {
-  final _companyNameController = TextEditingController();
-  final _headOfficeController = TextEditingController();
-  final _projectNameController = TextEditingController();
-  final _orientationsController = TextEditingController();
+  final _nameController = TextEditingController();
+  final _addressController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _projectsCountController = TextEditingController();
+  final _socialLinkController = TextEditingController();
   final _notesController = TextEditingController();
   
-  final AdminApi _adminApi = AdminApi();
+  final DeveloperApi _developerApi = DeveloperApi();
   bool _isLoading = false;
   
   static const Color brandRed = Color(0xFFE50914);
 
   @override
   void dispose() {
-    _companyNameController.dispose();
-    _headOfficeController.dispose();
-    _projectNameController.dispose();
-    _orientationsController.dispose();
+    _nameController.dispose();
+    _addressController.dispose();
+    _phoneController.dispose();
+    _projectsCountController.dispose();
+    _socialLinkController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -57,24 +59,31 @@ class _JoinUsScreenState extends State<JoinUsScreen> {
                     ),
                     const SizedBox(height: 20),
                     _buildTextField(
-                      controller: _companyNameController,
-                      hint: 'Company Name*',
+                      controller: _nameController,
+                      hint: 'Name*',
                     ),
                     const SizedBox(height: 16),
                     _buildTextField(
-                      controller: _headOfficeController,
-                      hint: 'Head Office Adress*',
+                      controller: _addressController,
+                      hint: 'Address*',
                     ),
                     const SizedBox(height: 16),
                     _buildTextField(
-                      controller: _projectNameController,
-                      hint: 'Name of Project*',
+                      controller: _phoneController,
+                      hint: 'Phone Number*',
+                      keyboardType: TextInputType.phone,
                     ),
                     const SizedBox(height: 16),
                     _buildTextField(
-                      controller: _orientationsController,
-                      hint: 'Number of Orientations*',
+                      controller: _projectsCountController,
+                      hint: 'Number of Projects*',
                       keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTextField(
+                      controller: _socialLinkController,
+                      hint: 'Social Media Link (URL)*',
+                      keyboardType: TextInputType.url,
                     ),
                     const SizedBox(height: 16),
                     _buildTextField(
@@ -198,10 +207,11 @@ class _JoinUsScreenState extends State<JoinUsScreen> {
 
   Future<void> _handleSubmit() async {
     // Validate required fields
-    if (_companyNameController.text.trim().isEmpty ||
-        _headOfficeController.text.trim().isEmpty ||
-        _projectNameController.text.trim().isEmpty ||
-        _orientationsController.text.trim().isEmpty) {
+    if (_nameController.text.trim().isEmpty ||
+        _addressController.text.trim().isEmpty ||
+        _phoneController.text.trim().isEmpty ||
+        _projectsCountController.text.trim().isEmpty ||
+        _socialLinkController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please fill all required fields'),
@@ -211,12 +221,12 @@ class _JoinUsScreenState extends State<JoinUsScreen> {
       return;
     }
 
-    // Parse orientations count
-    final orientationsCount = int.tryParse(_orientationsController.text.trim());
-    if (orientationsCount == null || orientationsCount <= 0) {
+    // Parse number of projects
+    final numberOfProjects = int.tryParse(_projectsCountController.text.trim());
+    if (numberOfProjects == null || numberOfProjects <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please enter a valid number of orientations'),
+          content: Text('Please enter a valid number of projects'),
           backgroundColor: brandRed,
         ),
       );
@@ -228,20 +238,14 @@ class _JoinUsScreenState extends State<JoinUsScreen> {
     });
 
     try {
-      final request = JoinRequestModel(
-        id: '',
-        userId: '',
-        companyName: _companyNameController.text.trim(),
-        headOffice: _headOfficeController.text.trim(),
-        projectName: _projectNameController.text.trim(),
-        orientationsCount: orientationsCount,
-        notes: _notesController.text.trim().isEmpty 
-            ? null 
-            : _notesController.text.trim(),
-        createdAt: DateTime.now(),
+      final success = await _developerApi.submitJoinDeveloperRequest(
+        name: _nameController.text.trim(),
+        address: _addressController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
+        numberOfProjects: numberOfProjects,
+        socialmediaLink: _socialLinkController.text.trim(),
+        notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
       );
-
-      final success = await _adminApi.submitJoinRequest(request);
       
       if (mounted) {
         setState(() {

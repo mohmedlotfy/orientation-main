@@ -389,11 +389,9 @@ ${clip.description}
             }
           },
           child: controller != null && controller.value.isInitialized
-              ? FittedBox(
-                  fit: BoxFit.cover,
-                  child: SizedBox(
-                    width: controller.value.size.width,
-                    height: controller.value.size.height,
+              ? Center(
+                  child: AspectRatio(
+                    aspectRatio: controller.value.aspectRatio,
                     child: VideoPlayer(controller),
                   ),
                 )

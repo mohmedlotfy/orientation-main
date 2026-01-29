@@ -16,11 +16,54 @@ class DioClient {
   // Default to production
   String _baseUrl = productionUrl;
   late Dio dio;
+  bool _isRefreshing = false;
 
   /// Set the base URL dynamically
   void setBaseUrl(String url) {
     _baseUrl = url;
     init(); // Reinitialize with new URL
+  }
+
+  Future<bool> _refreshToken() async {
+    if (_isRefreshing) return false; // Already refreshing
+    
+    try {
+      _isRefreshing = true;
+      final prefs = await SharedPreferences.getInstance();
+      final refreshToken = prefs.getString('refresh_token');
+      
+      if (refreshToken == null || refreshToken.isEmpty) {
+        print('⚠️ No refresh token available');
+        return false;
+      }
+      
+      print('🔄 Attempting to refresh access token...');
+      final response = await dio.post('/auth/refresh', data: {'refreshToken': refreshToken});
+      final data = response.data as Map<String, dynamic>;
+      
+      final newAccessToken = data['accessToken']?.toString() ?? '';
+      final newRefreshToken = data['refreshToken']?.toString() ?? '';
+      
+      if (newAccessToken.isNotEmpty) {
+        await prefs.setString('auth_token', newAccessToken);
+        print('✅ Token refreshed successfully');
+        if (newRefreshToken.isNotEmpty) {
+          await prefs.setString('refresh_token', newRefreshToken);
+        }
+        return true;
+      }
+      
+      return false;
+    } catch (e) {
+      print('❌ Failed to refresh token: $e');
+      // Clear tokens on refresh failure
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('auth_token');
+      await prefs.remove('refresh_token');
+      return false;
+    } finally {
+      _isRefreshing = false;
+    }
   }
 
   void init() {
@@ -36,7 +79,7 @@ class DioClient {
       ),
     );
 
-    // Add interceptors for logging and token handling
+    // Add interceptors for logging, token handling, and auto-refresh
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
@@ -57,13 +100,44 @@ class DioClient {
         onResponse: (response, handler) {
           return handler.next(response);
         },
-        onError: (error, handler) {
+        onError: (error, handler) async {
           // Log errors for debugging
           print('DioError: ${error.message}');
           if (error.response != null) {
             print('Response: ${error.response?.data}');
             print('Status: ${error.response?.statusCode}');
           }
+          
+          // Auto-refresh token on 401 (except for auth endpoints)
+          if (error.response?.statusCode == 401) {
+            final requestPath = error.requestOptions.path;
+            
+            // Don't refresh for auth endpoints (login, register, refresh, etc.)
+            if (!requestPath.startsWith('/auth/')) {
+              print('🔄 401 Unauthorized - attempting token refresh...');
+              
+              final refreshed = await _refreshToken();
+              if (refreshed) {
+                // Retry the original request with new token
+                final prefs = await SharedPreferences.getInstance();
+                final newToken = prefs.getString('auth_token');
+                
+                if (newToken != null) {
+                  error.requestOptions.headers['Authorization'] = 'Bearer $newToken';
+                  print('🔄 Retrying request with new token...');
+                  
+                  try {
+                    final opts = error.requestOptions;
+                    final response = await dio.fetch(opts);
+                    return handler.resolve(response);
+                  } catch (e) {
+                    return handler.next(error);
+                  }
+                }
+              }
+            }
+          }
+          
           return handler.next(error);
         },
       ),

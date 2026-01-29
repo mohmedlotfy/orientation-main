@@ -897,18 +897,20 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
                   onTap: _toggleSave,
                   child: _buildSaveButton(),
                 ),
-                GestureDetector(
-                  onTap: _openWhatsApp,
-                  child: _buildImageActionButton('assets/icons_clips/whatsapp.png', iconSize: 56),
-                ),
+                if (_project != null && _project!.whatsappNumber.isNotEmpty)
+                  GestureDetector(
+                    onTap: _openWhatsApp,
+                    child: _buildImageActionButton('assets/icons_clips/whatsapp.png', iconSize: 56),
+                  ),
                 GestureDetector(
                   onTap: _shareProject,
                   child: _buildImageActionButton('assets/icons_clips/share.png', iconSize: 56),
                 ),
-                GestureDetector(
-                  onTap: _openLocation,
-                  child: _buildActionButton(Icons.location_on_outlined),
-                ),
+                if (_project != null && _project!.locationUrl.isNotEmpty)
+                  GestureDetector(
+                    onTap: _openLocation,
+                    child: _buildActionButton(Icons.location_on_outlined),
+                  ),
               ],
             ),
           ),
@@ -1155,7 +1157,7 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
             final isAuth = await AuthHelper.requireAuth(context);
             if (!isAuth) return;
             
-            await Navigator.push(
+            final result = await Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => EpisodePlayerScreen(
@@ -1166,6 +1168,10 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
             );
             // Progress should be saved automatically when EpisodePlayerScreen disposes
             print('✅ Returned from Episode Player - progress should be saved');
+            // Return true to indicate that watch progress was updated
+            if (mounted && result == true) {
+              Navigator.pop(context, true); // Pass result to parent screen
+            }
           },
         );
       },

@@ -176,7 +176,13 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> with WidgetsB
             (progress - _lastSavedProgress!).abs() > 0.02) { // 2% change
           _lastSavedProgress = progress;
           print('💾 Saving progress: projectId=$_projectId, episodeId=${widget.episode.id}, progress=${(progress * 100).toStringAsFixed(1)}%');
-          _projectApi.trackWatching(_projectId!, widget.episode.id, progress);
+          _projectApi.updateEpisodeWatchProgress(
+            projectId: _projectId!,
+            episode: widget.episode,
+            projectTitle: widget.projectTitle,
+            currentTimeSeconds: position.inMilliseconds / 1000.0,
+            durationSeconds: duration.inMilliseconds / 1000.0,
+          );
         }
       }
     } else {
@@ -206,7 +212,13 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> with WidgetsB
       if (duration.inMilliseconds > 0) {
         final progress = position.inMilliseconds / duration.inMilliseconds;
         print('💾 Timer: Saving progress: projectId=$_projectId, episodeId=${widget.episode.id}, progress=${(progress * 100).toStringAsFixed(1)}%');
-        await _projectApi.trackWatching(_projectId!, widget.episode.id, progress);
+        await _projectApi.updateEpisodeWatchProgress(
+          projectId: _projectId!,
+          episode: widget.episode,
+          projectTitle: widget.projectTitle,
+          currentTimeSeconds: position.inMilliseconds / 1000.0,
+          durationSeconds: duration.inMilliseconds / 1000.0,
+        );
       }
     } else {
       print('❌ Cannot save progress: projectId=${_projectId}, controller=${_videoController != null}, initialized=${_videoController?.value.isInitialized}');
@@ -228,7 +240,13 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> with WidgetsB
         final progress = position.inMilliseconds / duration.inMilliseconds;
         print('💾 Force saving on dispose: projectId=$_projectId, episodeId=${widget.episode.id}, progress=${(progress * 100).toStringAsFixed(1)}%');
         // Don't await - dispose can't be async
-        _projectApi.trackWatching(_projectId!, widget.episode.id, progress);
+        _projectApi.updateEpisodeWatchProgress(
+          projectId: _projectId!,
+          episode: widget.episode,
+          projectTitle: widget.projectTitle,
+          currentTimeSeconds: position.inMilliseconds / 1000.0,
+          durationSeconds: duration.inMilliseconds / 1000.0,
+        );
       }
     }
     _videoController?.pause();
@@ -299,7 +317,7 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> with WidgetsB
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, true), // Return true to indicate progress was updated
             icon: const Icon(Icons.arrow_back),
             label: const Text('Go Back'),
             style: ElevatedButton.styleFrom(
@@ -327,7 +345,7 @@ class _EpisodePlayerScreenState extends State<EpisodePlayerScreen> with WidgetsB
         children: [
           // Back button
           GestureDetector(
-            onTap: () => Navigator.pop(context),
+            onTap: () => Navigator.pop(context, true), // Return true to indicate progress was updated
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(

@@ -293,7 +293,7 @@ class AuthApi {
     };
   }
 
-  /// Update profile — PATCH /users/profile
+  /// Update profile — PATCH /users/:id
   /// Request: { username, email, phoneNumber } (backend UpdateUserDto; username used for display name)
   Future<bool> updateProfile({
     required String firstName,
@@ -306,13 +306,18 @@ class AuthApi {
       if (username.isEmpty) throw Exception('Name is required');
       if (!email.contains('@')) throw Exception('Email must contain @');
 
-      await _dioClient.dio.patch('/users/profile', data: {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('user_id');
+      if (userId == null || userId.isEmpty) {
+        throw Exception('Missing user id. Please login again.');
+      }
+
+      await _dioClient.dio.patch('/users/$userId', data: {
         'username': username,
         'email': email,
         'phoneNumber': phoneNumber,
       });
 
-      final prefs = await SharedPreferences.getInstance();
       await prefs.setString('user_first_name', firstName);
       await prefs.setString('user_last_name', lastName);
       await prefs.setString('user_email', email);
@@ -324,10 +329,16 @@ class AuthApi {
     }
   }
 
-  /// Update password — PATCH /users/profile with { password }
+  /// Update password — PATCH /users/:id with { password }
   Future<bool> updatePassword({required String newPassword}) async {
     try {
-      await _dioClient.dio.patch('/users/profile', data: {'password': newPassword});
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('user_id');
+      if (userId == null || userId.isEmpty) {
+        throw Exception('Missing user id. Please login again.');
+      }
+
+      await _dioClient.dio.patch('/users/$userId', data: {'password': newPassword});
       return true;
     } on DioException catch (e) {
       throw _handleError(e);

@@ -23,6 +23,7 @@ class _AddReelScreenState extends State<AddReelScreen> {
   bool _watchOrientationEnabled = false;
   String? _selectedProjectId;
   File? _selectedVideo;
+  File? _selectedThumbnail;
   bool _isLoading = false;
   bool _isLoadingProjects = false;
   List<ProjectModel> _developerProjects = [];
@@ -93,10 +94,29 @@ class _AddReelScreenState extends State<AddReelScreen> {
       if (result != null && result.files.single.path != null) {
         setState(() {
           _selectedVideo = File(result.files.single.path!);
+          // If user changes video, thumbnail might no longer match—reset it.
+          _selectedThumbnail = null;
         });
       }
     } catch (e) {
       _showSnackBar('Error picking video: $e');
+    }
+  }
+
+  Future<void> _pickThumbnail() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+      );
+
+      if (result != null && result.files.single.path != null) {
+        setState(() {
+          _selectedThumbnail = File(result.files.single.path!);
+        });
+      }
+    } catch (e) {
+      _showSnackBar('Error picking thumbnail: $e');
     }
   }
 
@@ -210,6 +230,9 @@ class _AddReelScreenState extends State<AddReelScreen> {
                   children: [
                     // Upload area
                     _buildUploadArea(),
+                    const SizedBox(height: 12),
+                    // Thumbnail upload/select area (below upload box)
+                    _buildThumbnailPickerArea(),
                     const SizedBox(height: 24),
                     // Title field
                     _buildTextField(
@@ -336,6 +359,98 @@ class _AddReelScreenState extends State<AddReelScreen> {
     );
   }
 
+  Widget _buildThumbnailPickerArea() {
+    try {
+      return GestureDetector(
+        onTap: _pickThumbnail,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0A0A0A),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.18),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: brandRed.withOpacity(0.9),
+                    width: 1.2,
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: _selectedThumbnail != null
+                      ? Image.file(
+                          _selectedThumbnail!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _buildThumbnailPlaceholder(),
+                        )
+                      : _buildThumbnailPlaceholder(),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Thumbnail',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _selectedThumbnail != null ? 'Tap to change' : 'Tap to add thumbnail',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.65),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: Colors.white.withOpacity(0.6),
+                size: 22,
+              ),
+            ],
+          ),
+        ),
+      );
+    } catch (e) {
+      print('❌ Error building thumbnail picker: $e');
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.red.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.red, width: 1),
+        ),
+        child: Text(
+          'Error: $e',
+          style: const TextStyle(color: Colors.red),
+        ),
+      );
+    }
+  }
+
   Widget _buildUploadArea() {
     return GestureDetector(
       onTap: _pickVideo,
@@ -426,6 +541,37 @@ class _AddReelScreenState extends State<AddReelScreen> {
                     ),
                   ],
                 ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildThumbnailPlaceholder() {
+    return Container(
+      color: Colors.black,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.image_outlined,
+              color: Colors.white.withOpacity(0.85),
+              size: 24,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Add',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.9),
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ),
       ),
     );

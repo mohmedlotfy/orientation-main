@@ -333,12 +333,40 @@ ${project.script ?? 'Check out this amazing project!'}
         
         final isSaved = _savedProjects[project.id] ?? false;
         
+        // Use the SAME logic as ProjectsListScreen (View all)
+        // Priority: projectThumbnailUrl > logo > image (if not video URL)
+        // Check if image is a video URL (ends with .mp4, .mov, .avi, etc. or contains 'video')
+        final isImageVideo = project.image.toLowerCase().contains('.mp4') || 
+                            project.image.toLowerCase().contains('.mov') || 
+                            project.image.toLowerCase().contains('.avi') ||
+                            project.image.toLowerCase().contains('video');
+        
+        final fallbackImage = (!isImageVideo && project.image.isNotEmpty) ? project.image : 
+                             (project.logo != null && project.logo!.isNotEmpty) ? project.logo! : null;
+        
+        final imageUrl = (project.isAsset && project.projectThumbnailUrl.startsWith('assets/')) 
+            ? null 
+            : (project.projectThumbnailUrl.isNotEmpty ? project.projectThumbnailUrl : fallbackImage);
+        final imageAsset = (project.isAsset && project.projectThumbnailUrl.startsWith('assets/')) 
+            ? (project.projectThumbnailUrl.isNotEmpty ? project.projectThumbnailUrl : 
+               (fallbackImage != null && fallbackImage.startsWith('assets/') ? fallbackImage : null))
+            : null;
+        
+        print('📋 LatestForUsScreen: Building item for "${project.title}" (id: ${project.id})');
+        print('   projectThumbnailUrl: "${project.projectThumbnailUrl}"');
+        print('   image: "${project.image}"');
+        print('   isAsset: ${project.isAsset}, startsWith assets/: ${project.projectThumbnailUrl.startsWith('assets/')}');
+        print('   Using imageAsset: $imageAsset');
+        print('   Using imageUrl: $imageUrl');
+        
         return ProjectListItem(
           projectId: project.id,
           developerName: project.developerName,
           projectName: project.title,
           gradientColors: gradientColors,
           isSaved: isSaved,
+          imageUrl: imageUrl,
+          imageAsset: imageAsset,
           onTap: () {
             Navigator.push(
               context,

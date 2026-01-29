@@ -440,6 +440,8 @@ class ProjectListItem extends StatelessWidget {
   final String projectName;
   final List<Color> gradientColors;
   final bool isSaved;
+  final String? imageUrl;
+  final String? imageAsset;
   final VoidCallback? onWatch;
   final VoidCallback? onBookmark;
   final VoidCallback? onShare;
@@ -452,6 +454,8 @@ class ProjectListItem extends StatelessWidget {
     required this.projectName,
     required this.gradientColors,
     this.isSaved = false,
+    this.imageUrl,
+    this.imageAsset,
     this.onWatch,
     this.onBookmark,
     this.onShare,
@@ -478,15 +482,9 @@ class ProjectListItem extends StatelessWidget {
                 ),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Center(
-                child: Text(
-                  'masaya',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
-                    fontSize: 14,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: _buildThumbnailImage(),
               ),
             ),
           ),
@@ -571,6 +569,70 @@ class ProjectListItem extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildThumbnailImage() {
+    print('🖼️ ProjectListItem: Building thumbnail for "$projectName"');
+    print('   imageAsset: $imageAsset');
+    print('   imageUrl: $imageUrl');
+    
+    if (imageAsset != null) {
+      print('   Using Image.asset: $imageAsset');
+      return Image.asset(
+        imageAsset!,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          print('⚠️ Error loading asset image: $imageAsset - $error');
+          return _buildThumbnailPlaceholder();
+        },
+      );
+    } else if (imageUrl != null && imageUrl!.isNotEmpty) {
+      print('   Using Image.network: $imageUrl');
+      return Image.network(
+        imageUrl!,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) {
+            print('✅ Image loaded successfully: $imageUrl');
+            return child;
+          }
+          return _buildThumbnailPlaceholder();
+        },
+        errorBuilder: (context, error, stackTrace) {
+          print('⚠️ Error loading network image: $imageUrl - $error');
+          return _buildThumbnailPlaceholder();
+        },
+      );
+    } else {
+      print('⚠️ No image URL/Asset available, using placeholder');
+      return _buildThumbnailPlaceholder();
+    }
+  }
+
+  Widget _buildThumbnailPlaceholder() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: gradientColors,
+        ),
+      ),
+      child: Center(
+        child: Text(
+          projectName.length > 8 ? projectName.substring(0, 8) : projectName,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.8),
+            fontSize: 12,
+            fontStyle: FontStyle.italic,
+            fontWeight: FontWeight.w500,
+          ),
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
       ),
     );
   }
