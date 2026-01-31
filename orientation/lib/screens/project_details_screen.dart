@@ -13,8 +13,10 @@ import '../models/episode_model.dart';
 import '../models/clip_model.dart';
 import '../models/pdf_file_model.dart';
 import '../services/api/project_api.dart';
+import '../services/cache_service.dart';
 import '../utils/auth_helper.dart';
 import '../widgets/skeleton_loader.dart';
+
 class ProjectDetailsScreen extends StatefulWidget {
   final String? projectId;
   final int initialTabIndex;
@@ -33,6 +35,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tabController;
   final ProjectApi _projectApi = ProjectApi();
+  final CacheService _cacheService = CacheService();
 
   static const Color brandRed = Color(0xFFE50914);
   static const Color brandGreen = Color(0xFF00C853);
@@ -120,25 +123,20 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     }
 
     try {
+      // 1. Fetch main project data
       final project = await _projectApi.getProjectById(widget.projectId!);
+
+      // 2. Fetch all other data sequentially
       final episodes = await _projectApi.getEpisodes(widget.projectId!);
       final clips = await _projectApi.getClipsByProject(widget.projectId!);
       final pdfFiles = await _projectApi.getPdfFiles(widget.projectId!);
       final isSaved = await _projectApi.isProjectSaved(widget.projectId!);
       final inventoryUrl = await _projectApi.getInventoryUrl(widget.projectId!);
 
+      // 3. Handle Developer Projects separately
       List<ProjectModel> relatedProjects = [];
-      if (project != null) {
-        if (project.area.isNotEmpty) {
-          final areaProjects = await _projectApi.getProjectsByArea(project.area);
-          for (final areaProject in areaProjects) {
-            if (areaProject.id != project.id && !relatedProjects.any((p) => p.id == areaProject.id)) {
-              relatedProjects.add(areaProject);
-              if (relatedProjects.length >= 3) break;
-            }
-          }
-        }
-        if (relatedProjects.length < 3 && project.developerId.isNotEmpty) {
+      if (project != null && project.developerId.isNotEmpty) {
+        try {
           final devProjects = await _projectApi.getDeveloperProjects(project.developerId);
           for (final devProject in devProjects) {
             if (devProject.id != project.id && !relatedProjects.any((p) => p.id == devProject.id)) {
@@ -146,17 +144,10 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
               if (relatedProjects.length >= 3) break;
             }
           }
+        } catch (e) {
+          print('⚠️ Error loading developer projects: $e');
+          relatedProjects = [];
         }
-        if (relatedProjects.length < 3) {
-          final others = await _projectApi.getProjects(limit: 10, excludeId: project.id);
-          for (final p in others) {
-            if (p.id != project.id && !relatedProjects.any((x) => x.id == p.id)) {
-              relatedProjects.add(p);
-              if (relatedProjects.length >= 3) break;
-            }
-          }
-        }
-        relatedProjects = relatedProjects.take(3).toList();
       }
 
       _adVideoController?.pause();
@@ -173,6 +164,10 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
           _isLoading = false;
         });
         _initializeAdVideo();
+        
+        if (project != null && project.image.isNotEmpty) {
+          _cacheService.cacheProjectHeroImage(project.id, project.image);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -371,7 +366,9 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     final isAuth = await AuthHelper.requireAuth(context);
     if (!isAuth) return;
     
-    if (_project == null || _project!.whatsappNumber.isEmpty) {
+    if (_project == null || 
+        _project!.whatsappNumber.isEmpty || 
+        _project!.whatsappNumber.trim().isEmpty) {
       _showSnackBar('WhatsApp number not available', isError: true);
       return;
     }
@@ -615,6 +612,10 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const ProjectDetailsLoadingPlaceholder();
+    }
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Column(
@@ -897,7 +898,9 @@ ${_project!.script.isNotEmpty ? _project!.script : _project!.description}
                   onTap: _toggleSave,
                   child: _buildSaveButton(),
                 ),
-                if (_project != null && _project!.whatsappNumber.isNotEmpty)
+                if (_project != null && 
+                    _project!.whatsappNumber.isNotEmpty && 
+                    _project!.whatsappNumber.trim().isNotEmpty)
                   GestureDetector(
                     onTap: _openWhatsApp,
                     child: _buildImageActionButton('assets/icons_clips/whatsapp.png', iconSize: 56),
@@ -1847,6 +1850,22 @@ class _ProjectItem extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class ProjectDetailsLoadingPlaceholder extends StatelessWidget {
+  const ProjectDetailsLoadingPlaceholder({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
+        child: CircularProgressIndicator(
+          color: Color(0xFFE50914),
         ),
       ),
     );

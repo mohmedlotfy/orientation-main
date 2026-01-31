@@ -49,18 +49,59 @@ class _AddReelScreenState extends State<AddReelScreen> {
     });
 
     try {
+      print('═══════════════════════════════════════════════════════════');
+      print('📡 LOADING DEVELOPER PROJECTS - START');
+      print('═══════════════════════════════════════════════════════════');
+      
       final userInfo = await _authApi.getStoredUserInfo();
-      // developerId from user profile when backend supports it; '' returns all (backend omits filter when empty)
-      final developerId = userInfo['developerId']?.toString() ?? '';
+      print('👤 User Info: $userInfo');
+      
+      // Try to get developerId from user profile
+      String developerId = '';
+      try {
+        final profile = await _authApi.getUserProfile();
+        print('📋 User Profile: $profile');
+        developerId = profile['developerId']?.toString() ?? 
+                      userInfo['developerId']?.toString() ?? 
+                      '';
+      } catch (e) {
+        print('⚠️ Error getting user profile: $e');
+        developerId = userInfo['developerId']?.toString() ?? '';
+      }
+      
+      print('🔍 DeveloperId to use: "$developerId"');
+      print('   (empty = will get all projects from trending)');
+      print('');
+      
       final projects = await _projectApi.getDeveloperProjects(developerId);
+      
+      print('📦 Projects received: ${projects.length}');
+      print('   Project IDs: ${projects.map((p) => p.id).toList()}');
+      print('   Project Titles: ${projects.map((p) => p.title).toList()}');
+      print('═══════════════════════════════════════════════════════════');
+      print('📡 LOADING DEVELOPER PROJECTS - END');
+      print('═══════════════════════════════════════════════════════════');
+      print('');
       
       if (mounted) {
         setState(() {
           _developerProjects = projects;
           _isLoadingProjects = false;
         });
+        
+        if (projects.isEmpty) {
+          print('⚠️ WARNING: No projects loaded! Showing "No projects available"');
+        }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('═══════════════════════════════════════════════════════════');
+      print('❌ ERROR LOADING DEVELOPER PROJECTS');
+      print('═══════════════════════════════════════════════════════════');
+      print('Error: $e');
+      print('Stack Trace: $stackTrace');
+      print('═══════════════════════════════════════════════════════════');
+      print('');
+      
       if (mounted) {
         setState(() {
           _isLoadingProjects = false;

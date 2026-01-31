@@ -175,23 +175,23 @@ class Top10Card extends StatelessWidget {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: project.image.isNotEmpty && project.isAsset
-                    ? Image.asset(
-                        project.image,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return _buildFallbackImage();
-                        },
-                      )
-                    : project.image.isNotEmpty && !project.isAsset
-                        ? Image.network(
-                            project.image,
+                child: (project.projectThumbnailUrl.isNotEmpty || project.image.isNotEmpty)
+                    ? (project.isAsset
+                        ? Image.asset(
+                            project.projectThumbnailUrl.isNotEmpty ? project.projectThumbnailUrl : project.image,
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) {
                               return _buildFallbackImage();
                             },
                           )
-                        : _buildFallbackImage(),
+                        : Image.network(
+                            project.projectThumbnailUrl.isNotEmpty ? project.projectThumbnailUrl : project.image,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return _buildFallbackImage();
+                            },
+                          ))
+                    : _buildFallbackImage(),
               ),
             ),
           ),

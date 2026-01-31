@@ -13,12 +13,14 @@ class ProjectsListScreen extends StatefulWidget {
   final String title;
   final int resultCount;
   final bool showSearch;
+  final String? areaName; // New parameter for filtering
 
   const ProjectsListScreen({
     super.key,
     required this.title,
     this.resultCount = 24,
     this.showSearch = true,
+    this.areaName,
   });
 
   @override
@@ -44,7 +46,10 @@ class _ProjectsListScreenState extends State<ProjectsListScreen> {
       List<ProjectModel> projects;
       
       // Load projects based on title/section
-      if (widget.title.contains('Northcoast') || widget.title.contains('North Coast')) {
+      // Load projects based on title/section or specific area
+      if (widget.areaName != null && widget.areaName!.isNotEmpty) {
+        projects = await _homeApi.getProjectsByArea(widget.areaName!);
+      } else if (widget.title.contains('Northcoast') || widget.title.contains('North Coast')) {
         projects = await _homeApi.getProjectsByArea('North Coast');
       } else if (widget.title.contains('New Cairo')) {
         projects = await _homeApi.getProjectsByArea('New Cairo');

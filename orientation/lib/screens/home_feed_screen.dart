@@ -7,6 +7,7 @@ import '../widgets/app_drawer.dart';
 import '../widgets/skeleton_loader.dart';
 import '../services/api/home_api.dart';
 import '../services/api/auth_api.dart';
+import '../services/cache_service.dart';
 import '../models/project_model.dart';
 import '../models/developer_model.dart';
 import '../models/area_model.dart';
@@ -35,6 +36,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
   final ScrollController _scrollController = ScrollController();
   final HomeApi _homeApi = HomeApi();
   final AuthApi _authApi = AuthApi();
+  final CacheService _cacheService = CacheService();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final GlobalKey<AppDrawerState> _drawerKey = GlobalKey<AppDrawerState>();
   final GlobalKey _upcomingSectionKey = GlobalKey();
@@ -395,10 +397,6 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
   }
 
   // Test method to add sample progress (for debugging)
-  Future<void> _testContinueWatching() async {
-    // TODO: Implement test functionality
-  }
-
   Future<void> _loadUserName() async {
     final isLoggedIn = await _authApi.isLoggedIn();
     if (!mounted) return;
@@ -471,6 +469,15 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
         });
         print('✅ Essential data loaded and UI updated. Featured: ${_featuredProjects.length}, Latest: ${_latestProjects.length}, Continue: ${_continueWatching.length}');
         _initializeVideo(); // Initialize video with featured projects
+        
+        // Cache home content in background (non-blocking)
+        // Combines all project lists for caching
+        final allProjects = <ProjectModel>[
+          ...featuredOnly,
+          ...latest,
+          ...continueWatching,
+        ];
+        _cacheService.cacheHomeContent(allProjects);
       } else {
         print('⚠️ Widget not mounted, skipping setState');
       }
@@ -659,40 +666,25 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
               child: _buildHorizontalProjectList(),
             ),
           ),
-          SliverToBoxAdapter(
-            child: _buildSection(
-              'Continue watching',
-              onViewAll: () async {
-                final isAuth = await AuthHelper.requireAuth(context);
-                if (!isAuth) return;
-                
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const ContinueWatchingScreen(),
-                  ),
-                );
-              },
-              child: Column(
-                children: [
-                  // Test button (for debugging - remove in production)
-                  if (_continueWatching.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: ElevatedButton(
-                        onPressed: _testContinueWatching,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: brandRed,
-                          foregroundColor: Colors.white,
-                        ),
-                        child: const Text('Test Continue Watching'),
-                      ),
+          // Only show "Continue watching" section if there are videos or still loading
+          if (_continueWatching.isNotEmpty || _isLoading)
+            SliverToBoxAdapter(
+              child: _buildSection(
+                'Continue watching',
+                onViewAll: () async {
+                  final isAuth = await AuthHelper.requireAuth(context);
+                  if (!isAuth) return;
+                  
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ContinueWatchingScreen(),
                     ),
-                  _buildContinueWatchingList(),
-                ],
+                  );
+                },
+                child: _buildContinueWatchingList(),
               ),
             ),
-          ),
           SliverToBoxAdapter(
             child: _buildSection(
               'Top 10',
@@ -771,27 +763,11 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
             key: _upcomingSectionKey,
             child: _buildSection(
               'Upcoming Projects',
-              onViewAll: () {},
+              onViewAll: null,
               child: _buildUpcomingProjectsList(),
             ),
           ),
-          SliverToBoxAdapter(
-            child: _buildSection(
-              'Developers',
-              onViewAll: () async {
-                final isAuth = await AuthHelper.requireAuth(context);
-                if (!isAuth) return;
-                
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const DevelopersScreen(),
-                  ),
-                );
-              },
-              child: _buildDevelopersList(),
-            ),
-          ),
+
           SliverToBoxAdapter(
             child: _buildSection(
               'Discover Areas',
@@ -1464,9 +1440,14 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
 
   Widget _buildSection(
     String title, {
-    required VoidCallback onViewAll,
+    VoidCallback? onViewAll,
     required Widget child,
   }) {
+    // Hide section completely if child is empty (SizedBox.shrink)
+    if (child is SizedBox && (child as SizedBox).width == 0 && (child as SizedBox).height == 0) {
+      return const SizedBox.shrink();
+    }
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1483,17 +1464,18 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              GestureDetector(
-                onTap: onViewAll,
-                child: const Text(
-                  'View all',
-                  style: TextStyle(
-                    color: brandRed,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
+              if (onViewAll != null)
+                GestureDetector(
+                  onTap: onViewAll,
+                  child: const Text(
+                    'View all',
+                    style: TextStyle(
+                      color: brandRed,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
         ),
@@ -1646,21 +1628,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
     }
     
     if (_continueWatching.isEmpty) {
-      return SizedBox(
-        height: 110,
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              'No videos in progress',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.5),
-                fontSize: 14,
-              ),
-            ),
-          ),
-        ),
-      );
+      // Return empty container when no videos in progress
+      return const SizedBox.shrink();
     }
 
     return SizedBox(
@@ -2256,23 +2225,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
               imageAsset: (project.isAsset && project.projectThumbnailUrl.startsWith('assets/')) 
                   ? (project.projectThumbnailUrl.isNotEmpty ? project.projectThumbnailUrl : project.image)
                   : null,
-              onTap: () async {
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ProjectDetailsScreen(
-                      projectId: project.id,
-                      initialTabIndex: 1, // Open on Episodes tab
-                    ),
-                  ),
-                );
-                // Refresh continue watching if episode was watched
-                if (result == true) {
-                  print('🔄 Episode was watched, refreshing continue watching...');
-                  await _refreshContinueWatching();
-                  print('✅ Continue watching refreshed after watching episode');
-                }
-              },
+              // onTap disabled for upcoming projects
+
             ),
           );
         },
@@ -2513,42 +2467,74 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> with WidgetsBindingObse
   }
 
   Widget _buildAreaChips() {
+    final List<String> areas = [
+      'Madinaty',
+      'Sheraton',
+      'New Cairo',
+      'North Coast',
+      'New Capital',
+      'Sidi Abdelrhman',
+      'October',
+      'Ras Alhekma',
+      'Mostakbal City',
+      'Maadi',
+      '6th Settlement',
+    ];
+
     return SizedBox(
       height: 50,
-      child: ListView(
+      child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        children: [
-          _buildAreaChip('North Coast'),
-          const SizedBox(width: 10),
-          _buildAreaChip('Administrative Capital'),
-          const SizedBox(width: 10),
-          _buildAreaChip('Fifth Settlement'),
-          const SizedBox(width: 10),
-          _buildAreaChip('New Cairo'),
-        ],
+        itemCount: areas.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final area = areas[index];
+          return _buildAreaChip(area, onTap: () => _navigateToAreaProjects(area));
+        },
       ),
     );
   }
 
-  Widget _buildAreaChip(String name) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF2A2A2A),
-        borderRadius: BorderRadius.circular(25),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.1),
+  void _navigateToAreaProjects(String areaName) async {
+    final isAuth = await AuthHelper.requireAuth(context);
+    if (!isAuth) return;
+
+    if (mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProjectsListScreen(
+            title: 'Projects in $areaName',
+            areaName: areaName,
+          ),
         ),
-      ),
-      child: Text(
-        name,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
+      );
+    }
+  }
+
+  Widget _buildAreaChip(String name, {VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2A2A2A),
+          borderRadius: BorderRadius.circular(25),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.1),
+          ),
+        ),
+        child: Text(
+          name,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ),
     );
   }
+
 }

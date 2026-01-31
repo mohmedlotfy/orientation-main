@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/clip_model.dart';
 import '../services/api/project_api.dart';
+import '../services/reels_video_manager.dart';
 import '../utils/auth_helper.dart';
 import 'project_details_screen.dart';
 
@@ -25,10 +26,11 @@ class ReelsPlayerScreen extends StatefulWidget {
 class _ReelsPlayerScreenState extends State<ReelsPlayerScreen> with WidgetsBindingObserver {
   late PageController _pageController;
   final ProjectApi _projectApi = ProjectApi();
-  final Map<int, VideoPlayerController> _controllers = {};
+  final ReelsVideoManager _videoManager = ReelsVideoManager();
   final Map<int, bool> _likedClips = {};
-  final Map<int, bool> _savedClips = {};
+  final Map<String, bool> _savedReelIds = {}; // Store saved status by reel ID
   int _currentIndex = 0;
+  bool _isInitialized = false;
 
   static const Color brandRed = Color(0xFFE50914);
 
@@ -38,7 +40,24 @@ class _ReelsPlayerScreenState extends State<ReelsPlayerScreen> with WidgetsBindi
     WidgetsBinding.instance.addObserver(this);
     _currentIndex = widget.initialIndex;
     _pageController = PageController(initialPage: widget.initialIndex);
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    // Initialize video manager with clips (starts preloading immediately)
+    _videoManager.initialize(widget.clips);
+    
+    // Mark as initialized immediately so UI can show placeholders
+    if (mounted) {
+      setState(() {
+        _isInitialized = true;
+      });
+    }
+    
+    // Load initial video (non-blocking for UI)
     _initializeCurrentVideo();
+    
+    // Load liked and saved status in parallel (non-blocking)
     _loadLikedStatus();
     _loadSavedStatus();
   }
@@ -47,15 +66,9 @@ class _ReelsPlayerScreenState extends State<ReelsPlayerScreen> with WidgetsBindi
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || 
         state == AppLifecycleState.inactive) {
-      _pauseAllVideos();
-    }
-  }
-
-  void _pauseAllVideos() {
-    for (var controller in _controllers.values) {
-      if (controller.value.isPlaying) {
-        controller.pause();
-      }
+      _videoManager.pauseAll();
+    } else if (state == AppLifecycleState.resumed) {
+      _videoManager.playCurrent();
     }
   }
 
@@ -71,103 +84,52 @@ class _ReelsPlayerScreenState extends State<ReelsPlayerScreen> with WidgetsBindi
   }
 
   Future<void> _loadSavedStatus() async {
-    for (int i = 0; i < widget.clips.length; i++) {
-      final isSaved = await _projectApi.isProjectSaved(widget.clips[i].projectId);
+    if (!mounted) return;
+    try {
+      // Load all saved reels once instead of checking each one individually
+      final savedReels = await _projectApi.getSavedReels();
       if (mounted) {
         setState(() {
-          _savedClips[i] = isSaved;
+          _savedReelIds.clear();
+          for (final reel in savedReels) {
+            _savedReelIds[reel.id] = true;
+          }
         });
       }
+    } catch (e) {
+      print('❌ Error loading saved reels status: $e');
     }
   }
 
   Future<void> _initializeCurrentVideo() async {
-    await _initializeVideoAt(_currentIndex);
-    // Pre-load next video
-    if (_currentIndex + 1 < widget.clips.length) {
-      _initializeVideoAt(_currentIndex + 1);
-    }
-  }
-
-  Future<void> _initializeVideoAt(int index) async {
-    if (_controllers.containsKey(index)) return;
-    if (index < 0 || index >= widget.clips.length) return;
-
-    final clip = widget.clips[index];
-    // Use sample video for demo
-    // Flutter's official sample videos that work everywhere
-    final sampleVideos = [
-      'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
-      'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-    ];
-    final videoUrl = clip.videoUrl.isNotEmpty && !clip.videoUrl.contains('example.com')
-        ? clip.videoUrl
-        : sampleVideos[index % sampleVideos.length];
-
-    try {
-      final controller = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
-      await controller.initialize();
-      controller.setLooping(true);
-
-      if (index == _currentIndex) {
-        controller.play();
-      }
-
-      if (mounted) {
-        setState(() {
-          _controllers[index] = controller;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error initializing video at $index: $e');
+    final controller = await _videoManager.getControllerForIndex(
+      _currentIndex,
+      shouldPlay: true,
+    );
+    
+    if (controller != null && mounted) {
+      setState(() {});
     }
   }
 
   void _onPageChanged(int index) {
-    // Pause previous video
-    _controllers[_currentIndex]?.pause();
-
+    if (index == _currentIndex) return;
+    
+    // Update video manager
+    _videoManager.updateCurrentIndex(index);
+    
     setState(() {
       _currentIndex = index;
     });
-
-    // Play current video
-    if (_controllers.containsKey(index)) {
-      _controllers[index]!.play();
-    } else {
-      _initializeVideoAt(index);
-    }
-
-    // Pre-load next video
-    if (index + 1 < widget.clips.length) {
-      _initializeVideoAt(index + 1);
-    }
-
-    // Dispose old videos to save memory
-    _disposeOldControllers(index);
-  }
-
-  void _disposeOldControllers(int currentIndex) {
-    final keysToRemove = <int>[];
-    for (var key in _controllers.keys) {
-      if ((key - currentIndex).abs() > 2) {
-        keysToRemove.add(key);
-      }
-    }
-    for (var key in keysToRemove) {
-      _controllers[key]?.dispose();
-      _controllers.remove(key);
-    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _pauseAllVideos();
+    _videoManager.pauseAll();
     _pageController.dispose();
-    for (var controller in _controllers.values) {
-      controller.dispose();
-    }
+    // Note: Don't dispose video manager here - it's a singleton
+    // It will manage its own lifecycle
     super.dispose();
   }
 
@@ -187,36 +149,67 @@ class _ReelsPlayerScreenState extends State<ReelsPlayerScreen> with WidgetsBindi
       }
     } catch (e) {
       // Revert on error
-      setState(() {
-        _likedClips[index] = isCurrentlyLiked;
-      });
+      if (mounted) {
+        setState(() {
+          _likedClips[index] = isCurrentlyLiked;
+        });
+      }
     }
   }
 
   Future<void> _toggleSave(int index) async {
+    if (!mounted) return;
+    
     final isAuth = await AuthHelper.requireAuth(context);
-    if (!isAuth) return;
+    if (!isAuth || !mounted) return;
     
     final clip = widget.clips[index];
-    final isCurrentlySaved = _savedClips[index] ?? false;
+    final isCurrentlySaved = _savedReelIds[clip.id] ?? false;
 
-    setState(() {
-      _savedClips[index] = !isCurrentlySaved;
-    });
+    // Optimistic update
+    if (mounted) {
+      setState(() {
+        _savedReelIds[clip.id] = !isCurrentlySaved;
+      });
+    }
 
     try {
       if (!isCurrentlySaved) {
-        await _projectApi.saveProject(clip.projectId);
-        _showSnackBar('Saved!', isSuccess: true);
+        final success = await _projectApi.saveReel(clip.id);
+        if (success) {
+          if (mounted) _showSnackBar('Saved!', isSuccess: true);
+        } else {
+          // Revert on failure
+          if (mounted) {
+            setState(() {
+              _savedReelIds[clip.id] = isCurrentlySaved;
+            });
+            _showSnackBar('Error saving reel', isSuccess: false);
+          }
+        }
       } else {
-        await _projectApi.unsaveProject(clip.projectId);
-        _showSnackBar('Removed from saved', isSuccess: true);
+        final success = await _projectApi.unsaveReel(clip.id);
+        if (success) {
+          if (mounted) _showSnackBar('Removed from saved', isSuccess: true);
+        } else {
+          // Revert on failure
+          if (mounted) {
+            setState(() {
+              _savedReelIds[clip.id] = isCurrentlySaved;
+            });
+            _showSnackBar('Error removing reel', isSuccess: false);
+          }
+        }
       }
     } catch (e) {
-      setState(() {
-        _savedClips[index] = isCurrentlySaved;
-      });
-      _showSnackBar('Error saving');
+      print('❌ Error in _toggleSave: $e');
+      // Revert on error
+      if (mounted) {
+        setState(() {
+          _savedReelIds[clip.id] = isCurrentlySaved;
+        });
+        _showSnackBar('Error saving/removing reel', isSuccess: false);
+      }
     }
   }
 
@@ -253,7 +246,7 @@ ${clip.description}
     final isAuth = await AuthHelper.requireAuth(context);
     if (!isAuth) return;
     
-    _pauseAllVideos();
+    _videoManager.pauseAll();
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -266,7 +259,7 @@ ${clip.description}
     final isAuth = await AuthHelper.requireAuth(context);
     if (!isAuth) return;
     
-    _pauseAllVideos();
+    _videoManager.pauseAll();
     // Navigate to Project Details on Episodes tab
     Navigator.push(
       context,
@@ -280,6 +273,7 @@ ${clip.description}
   }
 
   void _showSnackBar(String message, {bool isSuccess = false}) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -323,7 +317,7 @@ ${clip.description}
             left: 16,
             child: GestureDetector(
               onTap: () {
-                _pauseAllVideos();
+                _videoManager.pauseAll();
                 Navigator.pop(context);
               },
               child: Container(
@@ -347,16 +341,25 @@ ${clip.description}
 
   Widget _buildReelItem(int index) {
     final clip = widget.clips[index];
-    final controller = _controllers[index];
+    final controller = _videoManager.controllers[index]; // Access through manager
     final isLiked = _likedClips[index] ?? false;
-    final isSaved = _savedClips[index] ?? false;
+    final isSaved = _savedReelIds[clip.id] ?? false;
+    
+    // Initialize video if not already loaded
+    if (controller == null && _isInitialized) {
+      // Trigger initialization in background
+      _videoManager.getControllerForIndex(
+        index,
+        shouldPlay: index == _currentIndex,
+      );
+    }
 
     return Stack(
       fit: StackFit.expand,
       children: [
         // Video or Placeholder
         GestureDetector(
-          onTap: () {
+          onTap: () async {
             if (controller != null && controller.value.isInitialized) {
               if (controller.value.isPlaying) {
                 controller.pause();
@@ -364,6 +367,13 @@ ${clip.description}
                 controller.play();
               }
               setState(() {});
+            } else {
+              // Initialize if not ready
+              await _videoManager.getControllerForIndex(
+                index,
+                shouldPlay: true,
+              );
+              if (mounted) setState(() {});
             }
           },
           child: controller != null && controller.value.isInitialized
@@ -373,25 +383,10 @@ ${clip.description}
                     child: VideoPlayer(controller),
                   ),
                 )
-              : Container(
-                  color: Colors.black,
-                  child: clip.thumbnail.isNotEmpty
-                      ? (clip.isAsset
-                          ? Image.asset(
-                              clip.thumbnail,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => _buildLoadingPlaceholder(),
-                            )
-                          : Image.network(
-                              clip.thumbnail,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => _buildLoadingPlaceholder(),
-                            ))
-                      : _buildLoadingPlaceholder(),
-                ),
+              : _buildLoadingState(clip, index),
         ),
         // Play/Pause indicator
-        if (controller != null && !controller.value.isPlaying)
+        if (controller != null && controller.value.isInitialized && !controller.value.isPlaying)
           Center(
             child: Container(
               padding: const EdgeInsets.all(16),
@@ -597,10 +592,53 @@ ${clip.description}
     );
   }
 
-  Widget _buildLoadingPlaceholder() {
-    return const Center(
-      child: CircularProgressIndicator(
-        color: Color(0xFFE50914),
+  Widget _buildLoadingState(ClipModel clip, int index) {
+    // Show shimmer loader while video is loading
+    return Container(
+      color: Colors.black,
+      child: Stack(
+        children: [
+          // Thumbnail as placeholder
+          if (clip.thumbnail.isNotEmpty)
+            clip.isAsset
+                ? Image.asset(
+                    clip.thumbnail,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _buildShimmerLoader(),
+                  )
+                : Image.network(
+                    clip.thumbnail,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _buildShimmerLoader(),
+                  )
+          else
+            _buildShimmerLoader(),
+          // Loading indicator overlay
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const CircularProgressIndicator(
+                color: brandRed,
+                strokeWidth: 2,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildShimmerLoader() {
+    return Container(
+      color: Colors.grey[900],
+      child: Center(
+        child: CircularProgressIndicator(
+          color: brandRed,
+        ),
       ),
     );
   }

@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../dio_client.dart';
@@ -101,72 +103,107 @@ class ProjectApi {
     await prefs.setStringList('saved_projects', ids);
   }
 
-  /// Get saved projects from user data (GET /users/:id or /auth/profile)
+  /// Get saved projects (GET /users/saved-projects or GET /projects/saved)
   /// Falls back to local cache if backend unavailable
   Future<List<ProjectModel>> getSavedProjects() async {
     try {
-      // Try to get from backend user data first
       if (await _hasAuthToken()) {
-        final prefs = await SharedPreferences.getInstance();
-        final userId = prefs.getString('user_id');
-        
-        if (userId != null && userId.isNotEmpty) {
-          print('📡 Fetching saved projects from user data (userId: $userId)...');
-          try {
-            // Try GET /users/:id first
-            final response = await _dioClient.dio.get('/users/$userId');
-            final userData = response.data as Map<String, dynamic>?;
-            
-            if (userData != null) {
-              final savedProjectsIds = userData['savedProjects'];
-              if (savedProjectsIds is List) {
-                final ids = savedProjectsIds.map((e) => e.toString()).where((id) => id.isNotEmpty).toList();
-                print('✅ Found ${ids.length} saved project IDs from user data');
-                
-                // Fetch each project
-                final out = <ProjectModel>[];
-                for (final id in ids) {
-                  final p = await getProjectById(id);
-                  if (p != null) out.add(p);
-                }
-                
-                // Update local cache
-                await prefs.setStringList('saved_projects', ids);
-                
-                print('✅ Loaded ${out.length} saved projects from backend');
-                return out;
-              }
-            }
-          } catch (e) {
-            print('⚠️ Failed to get saved projects from /users/:id, trying /auth/profile...');
-            // Try /auth/profile as fallback
-            try {
-              final response = await _dioClient.dio.get('/auth/profile');
-              final userData = response.data as Map<String, dynamic>?;
-              
-              if (userData != null) {
-                final savedProjectsIds = userData['savedProjects'];
-                if (savedProjectsIds is List) {
-                  final ids = savedProjectsIds.map((e) => e.toString()).where((id) => id.isNotEmpty).toList();
-                  print('✅ Found ${ids.length} saved project IDs from /auth/profile');
-                  
-                  final out = <ProjectModel>[];
-                  for (final id in ids) {
-                    final p = await getProjectById(id);
-                    if (p != null) out.add(p);
-                  }
-                  
-                  final prefs = await SharedPreferences.getInstance();
-                  await prefs.setStringList('saved_projects', ids);
-                  
-                  print('✅ Loaded ${out.length} saved projects from /auth/profile');
-                  return out;
-                }
-              }
-            } catch (e2) {
-              print('⚠️ /auth/profile also failed: $e2');
-            }
+        // Try GET /users/saved-projects first (returns { message, savedProjects: [...] })
+        try {
+          print('📡 Fetching saved projects from /users/saved-projects...');
+          final response = await _dioClient.dio.get('/users/saved-projects');
+          final data = response.data;
+          
+          List<dynamic>? projectsList;
+          if (data is Map<String, dynamic>) {
+            // Handle { message, savedProjects: [...] } format
+            projectsList = data['savedProjects'] as List<dynamic>?;
+          } else if (data is List) {
+            // Handle direct array format
+            projectsList = data;
           }
+          
+          if (projectsList != null && projectsList.isNotEmpty) {
+            final projects = projectsList
+                .map((e) {
+                  try {
+                    // Handle both full project objects and IDs
+                    if (e is Map<String, dynamic>) {
+                      return ProjectModel.fromJson(e);
+                    } else if (e is String) {
+                      // If it's just an ID, we'll need to fetch it
+                      return null;
+                    }
+                    return null;
+                  } catch (e) {
+                    print('⚠️ Error parsing saved project: $e');
+                    return null;
+                  }
+                })
+                .whereType<ProjectModel>()
+                .toList();
+            
+            // If we got IDs instead of full objects, fetch them
+            if (projects.isEmpty && projectsList.isNotEmpty) {
+              final ids = projectsList.map((e) => e.toString()).where((id) => id.isNotEmpty).toList();
+              final fetchedProjects = <ProjectModel>[];
+              for (final id in ids) {
+                final p = await getProjectById(id);
+                if (p != null) fetchedProjects.add(p);
+              }
+              projects.addAll(fetchedProjects);
+            }
+            
+            // Update local cache
+            final prefs = await SharedPreferences.getInstance();
+            final ids = projects.map((p) => p.id).toList();
+            await prefs.setStringList('saved_projects', ids);
+            
+            print('✅ Loaded ${projects.length} saved projects from /users/saved-projects');
+            return projects;
+          }
+        } catch (e) {
+          print('⚠️ /users/saved-projects failed: $e, trying /projects/saved...');
+        }
+        
+        // Fallback: Try GET /projects/saved (returns array directly)
+        try {
+          print('📡 Fetching saved projects from /projects/saved...');
+          final response = await _dioClient.dio.get('/projects/saved');
+          final data = response.data;
+          
+          List<dynamic> projectsList;
+          if (data is List) {
+            projectsList = data;
+          } else if (data is Map<String, dynamic> && data['projects'] is List) {
+            projectsList = data['projects'] as List;
+          } else {
+            projectsList = <dynamic>[];
+          }
+          
+          if (projectsList.isNotEmpty) {
+            final projects = projectsList
+                .map((e) {
+                  try {
+                    return ProjectModel.fromJson(e as Map<String, dynamic>);
+                  } catch (e) {
+                    print('⚠️ Error parsing saved project: $e');
+                    return null;
+                  }
+                })
+                .whereType<ProjectModel>()
+                .toList();
+            
+            // Update local cache
+            final prefs = await SharedPreferences.getInstance();
+            final ids = projects.map((p) => p.id).toList();
+            await prefs.setStringList('saved_projects', ids);
+            
+            print('✅ Loaded ${projects.length} saved projects from /projects/saved');
+            return projects;
+          }
+        } catch (e) {
+          print('⚠️ /projects/saved also failed: $e');
         }
       }
     } catch (e) {
@@ -380,12 +417,88 @@ class ProjectApi {
     }
   }
 
+  /// Check if a reel is saved (optimized - doesn't fetch full list)
+  Future<bool> isReelSaved(String reelId) async {
+    try {
+      if (!await _hasAuthToken()) {
+        return false;
+      }
+      
+      // Quick check: Try to get saved reels from API
+      // But don't wait too long - use timeout
+      try {
+        final response = await _dioClient.dio.get('/reels/saved').timeout(
+          const Duration(seconds: 3),
+          onTimeout: () {
+            throw TimeoutException('Request timeout');
+          },
+        );
+        
+        final data = response.data;
+        List<dynamic> reelsList;
+        
+        if (data is List) {
+          reelsList = data;
+        } else if (data is Map<String, dynamic>) {
+          reelsList = data['reels'] as List<dynamic>? ?? 
+                      data['savedReels'] as List<dynamic>? ?? 
+                      <dynamic>[];
+        } else {
+          reelsList = <dynamic>[];
+        }
+        
+        // Check if reelId exists in the list
+        for (final reel in reelsList) {
+          if (reel is Map<String, dynamic>) {
+            final id = _resolveId(reel['_id']) ?? _resolveId(reel['id']);
+            if (id == reelId) {
+              return true;
+            }
+          } else if (reel is String && reel == reelId) {
+            return true;
+          }
+        }
+        
+        return false;
+      } catch (e) {
+        // If API call fails, return false (not saved)
+        print('⚠️ Error checking if reel is saved: $e');
+        return false;
+      }
+    } catch (e) {
+      print('⚠️ Error in isReelSaved: $e');
+      return false;
+    }
+  }
+
   /// POST /reels/:id/save — Save a reel to user's saved reels
   Future<bool> saveReel(String reelId) async {
     try {
-      await _dioClient.dio.post('/reels/$reelId/save');
-      return true;
-    } on DioException catch (_) {
+      if (reelId.isEmpty) {
+        print('⚠️ Cannot save reel: reelId is empty');
+        return false;
+      }
+      
+      final response = await _dioClient.dio.post('/reels/$reelId/save').timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw TimeoutException('Save reel request timeout');
+        },
+      );
+      
+      return response.statusCode == 200 || response.statusCode == 201;
+    } on TimeoutException catch (e) {
+      print('⚠️ Timeout saving reel: $e');
+      return false;
+    } on DioException catch (e) {
+      print('⚠️ Error saving reel: ${e.message}');
+      if (e.response != null) {
+        print('   Status: ${e.response?.statusCode}');
+        print('   Data: ${e.response?.data}');
+      }
+      return false;
+    } catch (e) {
+      print('⚠️ Unexpected error saving reel: $e');
       return false;
     }
   }
@@ -393,58 +506,109 @@ class ProjectApi {
   /// POST /reels/:id/unsave — Remove a reel from user's saved reels
   Future<bool> unsaveReel(String reelId) async {
     try {
-      await _dioClient.dio.post('/reels/$reelId/unsave');
-      return true;
-    } on DioException catch (_) {
+      if (reelId.isEmpty) {
+        print('⚠️ Cannot unsave reel: reelId is empty');
+        return false;
+      }
+      
+      final response = await _dioClient.dio.post('/reels/$reelId/unsave').timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw TimeoutException('Unsave reel request timeout');
+        },
+      );
+      
+      return response.statusCode == 200 || response.statusCode == 201;
+    } on TimeoutException catch (e) {
+      print('⚠️ Timeout unsaving reel: $e');
+      return false;
+    } on DioException catch (e) {
+      print('⚠️ Error unsaving reel: ${e.message}');
+      if (e.response != null) {
+        print('   Status: ${e.response?.statusCode}');
+        print('   Data: ${e.response?.data}');
+      }
+      return false;
+    } catch (e) {
+      print('⚠️ Unexpected error unsaving reel: $e');
       return false;
     }
   }
 
-  /// GET /reels/saved — Get all reels saved by the current user
-  /// Falls back to user data (savedReels array) if endpoint unavailable
+  /// Get saved reels (GET /users/saved-reels or GET /reels/saved)
   Future<List<ClipModel>> getSavedReels() async {
     try {
-      // Try GET /reels/saved endpoint first
       if (await _hasAuthToken()) {
-        print('📡 Fetching saved reels from /reels/saved...');
+        // Try GET /users/saved-reels first (returns { message, savedReels: [...] })
         try {
-          final response = await _dioClient.dio.get('/reels/saved');
-          final list = response.data is List ? response.data as List : <dynamic>[];
-          final reels = list.map((e) => ClipModel.fromJson(e as Map<String, dynamic>)).toList();
-          print('✅ Loaded ${reels.length} saved reels from /reels/saved');
-          return reels;
+          print('📡 Fetching saved reels from /users/saved-reels...');
+          final response = await _dioClient.dio.get('/users/saved-reels');
+          final data = response.data;
+          
+          List<dynamic>? reelsList;
+          if (data is Map<String, dynamic>) {
+            // Handle { message, savedReels: [...] } format
+            reelsList = data['savedReels'] as List<dynamic>?;
+          } else if (data is List) {
+            // Handle direct array format
+            reelsList = data;
+          }
+          
+          if (reelsList != null && reelsList.isNotEmpty) {
+            final reels = reelsList
+                .map((e) {
+                  try {
+                    return ClipModel.fromJson(e as Map<String, dynamic>);
+                  } catch (e) {
+                    print('⚠️ Error parsing saved reel: $e');
+                    return null;
+                  }
+                })
+                .whereType<ClipModel>()
+                .toList();
+            
+            print('✅ Loaded ${reels.length} saved reels from /users/saved-reels');
+            return reels;
+          }
         } catch (e) {
-          print('⚠️ /reels/saved failed, trying user data...');
+          print('⚠️ /users/saved-reels failed: $e, trying /reels/saved...');
         }
         
-        // Fallback: Get from user data
-        final prefs = await SharedPreferences.getInstance();
-        final userId = prefs.getString('user_id');
-        
-        if (userId != null && userId.isNotEmpty) {
-          try {
-            final response = await _dioClient.dio.get('/users/$userId');
-            final userData = response.data as Map<String, dynamic>?;
-            
-            if (userData != null) {
-              final savedReelsIds = userData['savedReels'];
-              if (savedReelsIds is List) {
-                final ids = savedReelsIds.map((e) => e.toString()).where((id) => id.isNotEmpty).toList();
-                print('✅ Found ${ids.length} saved reel IDs from user data');
-                
-                // Fetch each reel via GET /reels/:id or GET /reels and filter
-                final allReelsResponse = await _dioClient.dio.get('/reels');
-                final allReelsList = allReelsResponse.data is List ? allReelsResponse.data as List : <dynamic>[];
-                final allReels = allReelsList.map((e) => ClipModel.fromJson(e as Map<String, dynamic>)).toList();
-                
-                final savedReels = allReels.where((r) => ids.contains(r.id)).toList();
-                print('✅ Loaded ${savedReels.length} saved reels from user data');
-                return savedReels;
-              }
-            }
-          } catch (e) {
-            print('⚠️ Failed to get saved reels from user data: $e');
+        // Fallback: Try GET /reels/saved (returns { message, reels: [...] })
+        try {
+          print('📡 Fetching saved reels from /reels/saved...');
+          final response = await _dioClient.dio.get('/reels/saved');
+          final data = response.data;
+          
+          List<dynamic> reelsList;
+          if (data is List) {
+            // Handle direct array format
+            reelsList = data;
+          } else if (data is Map<String, dynamic>) {
+            // Handle { message, reels: [...] } format
+            reelsList = data['reels'] as List<dynamic>? ?? <dynamic>[];
+          } else {
+            reelsList = <dynamic>[];
           }
+          
+          if (reelsList.isNotEmpty) {
+            final reels = reelsList
+                .map((e) {
+                  try {
+                    return ClipModel.fromJson(e as Map<String, dynamic>);
+                  } catch (e) {
+                    print('⚠️ Error parsing saved reel: $e');
+                    return null;
+                  }
+                })
+                .whereType<ClipModel>()
+                .toList();
+            
+            print('✅ Loaded ${reels.length} saved reels from /reels/saved');
+            return reels;
+          }
+        } catch (e) {
+          print('⚠️ /reels/saved also failed: $e');
         }
       }
       
@@ -452,6 +616,9 @@ class ProjectApi {
       return [];
     } on DioException catch (e) {
       print('❌ Error getting saved reels: ${e.message}');
+      return [];
+    } catch (e) {
+      print('❌ Unexpected error getting saved reels: $e');
       return [];
     }
   }
@@ -496,17 +663,168 @@ class ProjectApi {
     }
   }
 
-  /// GET /projects/trending?limit= (backend doesn't have /projects?developerId=, use trending)
+  /// GET /projects/developer?developer=ID — Get projects by developer ID
+  /// OR GET /developer/me/projects — Get projects for authenticated developer (if developerId is empty)
   Future<List<ProjectModel>> getDeveloperProjects(String developerId) async {
     try {
-      // Backend doesn't have /projects?developerId=, use trending and filter client-side
-      final response = await _dioClient.dio.get('/projects/trending', queryParameters: {'limit': '100'});
-      final list = response.data is List ? response.data as List : <dynamic>[];
-      final allProjects = list.map((e) => ProjectModel.fromJson(e as Map<String, dynamic>)).toList();
-      // Filter by developerId client-side
-      return allProjects.where((p) => p.developerId == developerId).toList();
+      print('═══════════════════════════════════════════════════════════');
+      print('📡 GET DEVELOPER PROJECTS - START');
+      print('═══════════════════════════════════════════════════════════');
+      print('🔍 DeveloperId: "$developerId"');
+      
+      Response response;
+      
+      if (developerId.isNotEmpty && developerId.trim().isNotEmpty) {
+        // Use /projects/developer?developer=ID to get projects for specific developer
+        print('📡 Calling: GET /projects/developer?developer=$developerId');
+        response = await _dioClient.dio.get(
+          '/projects/developer',
+          queryParameters: {'developer': developerId.trim()},
+        );
+      } else {
+        // Use /developer/me/projects to get projects for authenticated developer
+        print('📡 Calling: GET /developer/me/projects (authenticated developer)');
+        response = await _dioClient.dio.get('/developer/me/projects');
+      }
+      
+      print('✅ Response Status: ${response.statusCode}');
+      print('📦 Response Data Type: ${response.data.runtimeType}');
+      print('');
+      
+      // Print full response with JSON formatting
+      print('📋 FULL RESPONSE DATA:');
+      print('───────────────────────────────────────────────────────────');
+      try {
+        // Try to format as JSON if it's a Map or List
+        if (response.data is Map || response.data is List) {
+          final encoder = JsonEncoder.withIndent('  ');
+          print(encoder.convert(response.data));
+        } else {
+          print(response.data.toString());
+        }
+      } catch (e) {
+        print(response.data.toString());
+      }
+      print('───────────────────────────────────────────────────────────');
+      print('');
+      
+      // Handle response format: 
+      // - /projects/developer returns array directly: [...]
+      // - /developer/me/projects returns: { message, projects: [...], developer: {...} }
+      List<dynamic> projectsList = [];
+      
+      if (response.data is List) {
+        // /projects/developer returns array directly
+        projectsList = response.data as List;
+        print('📋 Response is directly a List (from /projects/developer)');
+      } else if (response.data is Map) {
+        final data = response.data as Map<String, dynamic>;
+        if (data.containsKey('projects')) {
+          projectsList = data['projects'] is List 
+              ? data['projects'] as List 
+              : <dynamic>[];
+          print('📋 Found "projects" key in response (from /developer/me/projects)');
+        } else if (data.containsKey('data')) {
+          final dataValue = data['data'];
+          if (dataValue is List) {
+            projectsList = dataValue;
+            print('📋 Found "data" key in response');
+          }
+        } else {
+          // If response is a Map but no 'projects' key, check if it's a list of projects
+          print('⚠️ Response is Map but no "projects" key found. Keys: ${data.keys.toList()}');
+        }
+      }
+      
+      print('📊 Parsed Projects List Length: ${projectsList.length}');
+      print('');
+      
+      if (projectsList.isNotEmpty) {
+        print('📋 First Project Structure:');
+        print('   Type: ${projectsList[0].runtimeType}');
+        if (projectsList[0] is Map) {
+          final firstProject = projectsList[0] as Map<String, dynamic>;
+          print('   Keys: ${firstProject.keys.toList()}');
+          if (firstProject.containsKey('developer')) {
+            print('   Developer field: ${firstProject['developer']}');
+            print('   Developer type: ${firstProject['developer'].runtimeType}');
+          }
+          if (firstProject.containsKey('_id')) {
+            print('   _id: ${firstProject['_id']}');
+          }
+          if (firstProject.containsKey('title')) {
+            print('   title: ${firstProject['title']}');
+          }
+        }
+        print('');
+      }
+      
+      // Parse projects
+      final projects = <ProjectModel>[];
+      for (var i = 0; i < projectsList.length; i++) {
+        try {
+          final projectData = projectsList[i] as Map<String, dynamic>;
+          final project = ProjectModel.fromJson(projectData);
+          projects.add(project);
+          print('✅ [$i] Parsed: ${project.title} (ID: ${project.id}, DevID: ${project.developerId})');
+        } catch (parseError, stackTrace) {
+          print('⚠️ Error parsing project at index $i: $parseError');
+          print('   Data: ${projectsList[i]}');
+          print('   Stack: $stackTrace');
+        }
+      }
+      
+      print('');
+      print('✅ Total Parsed Projects: ${projects.length}');
+      print('');
+      
+      // Print all project titles
+      if (projects.isNotEmpty) {
+        print('📋 All Projects:');
+        for (var i = 0; i < projects.length; i++) {
+          final project = projects[i];
+          print('   [$i] ${project.title} (DevID: "${project.developerId}")');
+        }
+        print('');
+      }
+      
+      print('═══════════════════════════════════════════════════════════');
+      print('📡 GET DEVELOPER PROJECTS - END');
+      print('═══════════════════════════════════════════════════════════');
+      print('');
+      
+      return projects;
     } on DioException catch (e) {
-      print('❌ Error getting developer projects: ${e.message}');
+      print('═══════════════════════════════════════════════════════════');
+      print('❌ ERROR GETTING DEVELOPER PROJECTS');
+      print('═══════════════════════════════════════════════════════════');
+      print('Error: ${e.message}');
+      print('Type: ${e.type}');
+      if (e.response != null) {
+        print('Status: ${e.response?.statusCode}');
+        print('Response Data:');
+        print(e.response?.data);
+        
+        // Handle specific error cases
+        if (e.response?.statusCode == 401) {
+          print('⚠️ 401 Unauthorized - User may not be authenticated or not a developer');
+        } else if (e.response?.statusCode == 403) {
+          print('⚠️ 403 Forbidden - User may not have developer permissions');
+        } else if (e.response?.statusCode == 404) {
+          print('⚠️ 404 Not Found - Endpoint may not exist or user has no projects');
+        }
+      }
+      print('═══════════════════════════════════════════════════════════');
+      print('');
+      return [];
+    } catch (e, stackTrace) {
+      print('═══════════════════════════════════════════════════════════');
+      print('❌ UNEXPECTED ERROR GETTING DEVELOPER PROJECTS');
+      print('═══════════════════════════════════════════════════════════');
+      print('Error: $e');
+      print('Stack Trace: $stackTrace');
+      print('═══════════════════════════════════════════════════════════');
+      print('');
       return [];
     }
   }

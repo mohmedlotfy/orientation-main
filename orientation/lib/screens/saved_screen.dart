@@ -21,6 +21,7 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
   List<ClipModel> _savedReels = [];
   bool _isLoadingProjects = true;
   bool _isLoadingReels = true;
+  bool _isRefreshing = false; // Prevent multiple simultaneous refreshes
 
   @override
   void initState() {
@@ -37,6 +38,8 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
   }
 
   Future<void> _loadSavedProjects() async {
+    if (!mounted) return;
+    
     setState(() {
       _isLoadingProjects = true;
     });
@@ -50,6 +53,7 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
         });
       }
     } catch (e) {
+      print('⚠️ Error loading saved projects: $e');
       if (mounted) {
         setState(() {
           _isLoadingProjects = false;
@@ -59,19 +63,42 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
   }
 
   Future<void> _loadSavedReels() async {
+    if (!mounted) return;
+    
     setState(() {
       _isLoadingReels = true;
     });
 
     try {
-      final reels = await _projectApi.getSavedReels();
+      // 1. Get saved reels (might have missing fields from some endpoints)
+      final savedReels = await _projectApi.getSavedReels();
+      
+      // 2. Get all clips to hydrate missing data (like thumbnails)
+      // This is a robust fallback if the saved-reels endpoint returns partial data
+      final allClips = await _projectApi.getAllClips();
+      
+      final hydratedReels = savedReels.map((saved) {
+        try {
+          // Find matching full clip
+          final full = allClips.firstWhere((c) => c.id == saved.id);
+          // Use full data if saved data has empty thumbnail but full has it
+          if (saved.thumbnail.isEmpty && full.thumbnail.isNotEmpty) {
+            return full;
+          }
+          return saved;
+        } catch (_) {
+          return saved;
+        }
+      }).toList();
+
       if (mounted) {
         setState(() {
-          _savedReels = reels;
+          _savedReels = hydratedReels;
           _isLoadingReels = false;
         });
       }
     } catch (e) {
+      print('⚠️ Error loading saved reels: $e');
       if (mounted) {
         setState(() {
           _isLoadingReels = false;
@@ -81,32 +108,52 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
   }
 
   Future<void> _refreshAll() async {
-    await Future.wait([
-      _loadSavedProjects(),
-      _loadSavedReels(),
-    ]);
+    if (!mounted || _isRefreshing) return;
+    
+    _isRefreshing = true;
+    try {
+      await Future.wait([
+        _loadSavedProjects(),
+        _loadSavedReels(),
+      ]);
+    } finally {
+      if (mounted) {
+        _isRefreshing = false;
+      }
+    }
   }
 
   Future<void> _removeFromSaved(ProjectModel project) async {
+    if (!mounted) return;
+    
     final isAuth = await AuthHelper.requireAuth(context);
-    if (!isAuth) return;
+    if (!isAuth || !mounted) return;
     
     // Optimistic update
-    setState(() {
-      _savedProjects.removeWhere((p) => p.id == project.id);
-    });
+    if (mounted) {
+      setState(() {
+        _savedProjects.removeWhere((p) => p.id == project.id);
+      });
+    }
 
     try {
       await _projectApi.unsaveProject(project.id);
-      _showSnackBar('Removed from saved');
+      if (mounted) {
+        _showSnackBar('Removed from saved');
+      }
     } catch (e) {
+      print('⚠️ Error removing project: $e');
       // Revert on error
-      _loadSavedProjects();
-      _showSnackBar('Error removing project', isError: true);
+      if (mounted) {
+        _loadSavedProjects();
+        _showSnackBar('Error removing project', isError: true);
+      }
     }
   }
 
   void _showSnackBar(String message, {bool isError = false}) {
+    if (!mounted) return;
+    
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -222,6 +269,7 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
       color: Colors.black,
       child: TabBar(
         controller: _tabController,
+        dividerColor: Colors.transparent, // Remove the white line
         indicatorColor: const Color(0xFFE50914),
         labelColor: Colors.white,
         unselectedLabelColor: Colors.white.withOpacity(0.5),
@@ -309,7 +357,11 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
                     projectId: project.id,
                   ),
                 ),
-              ).then((_) => _refreshAll()); // Refresh on return
+              ).then((_) {
+                if (mounted) {
+                  _refreshAll();
+                }
+              }); // Refresh on return
             },
             onRemove: () => _removeFromSaved(project),
           );
@@ -347,7 +399,11 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
                     projectId: reel.projectId,
                   ),
                 ),
-              ).then((_) => _refreshAll());
+              ).then((_) {
+                if (mounted) {
+                  _refreshAll();
+                }
+              });
             },
             onRemove: () => _removeFromSavedReel(reel),
           );
@@ -357,21 +413,30 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
   }
 
   Future<void> _removeFromSavedReel(ClipModel reel) async {
+    if (!mounted) return;
+    
     final isAuth = await AuthHelper.requireAuth(context);
-    if (!isAuth) return;
+    if (!isAuth || !mounted) return;
     
     // Optimistic update
-    setState(() {
-      _savedReels.removeWhere((r) => r.id == reel.id);
-    });
+    if (mounted) {
+      setState(() {
+        _savedReels.removeWhere((r) => r.id == reel.id);
+      });
+    }
 
     try {
       await _projectApi.unsaveReel(reel.id);
-      _showSnackBar('Removed from saved');
+      if (mounted) {
+        _showSnackBar('Removed from saved');
+      }
     } catch (e) {
+      print('⚠️ Error removing reel: $e');
       // Revert on error
-      _loadSavedReels();
-      _showSnackBar('Error removing reel', isError: true);
+      if (mounted) {
+        _loadSavedReels();
+        _showSnackBar('Error removing reel', isError: true);
+      }
     }
   }
 }
@@ -422,15 +487,15 @@ class _SavedProjectItem extends StatelessWidget {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: project.image.isNotEmpty
+                child: (project.projectThumbnailUrl.isNotEmpty || project.image.isNotEmpty)
                     ? (project.isAsset
                         ? Image.asset(
-                            project.image,
+                            project.projectThumbnailUrl.isNotEmpty ? project.projectThumbnailUrl : project.image,
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => _buildPlaceholder(),
                           )
                         : Image.network(
-                            project.image,
+                            project.projectThumbnailUrl.isNotEmpty ? project.projectThumbnailUrl : project.image,
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => _buildPlaceholder(),
                           ))
@@ -561,7 +626,7 @@ class _SavedReelItem extends StatelessWidget {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: reel.thumbnail.isNotEmpty
-                  ? (reel.isAsset
+                  ? ((reel.isAsset || reel.thumbnail.startsWith('assets/'))
                       ? Image.asset(
                           reel.thumbnail,
                           fit: BoxFit.cover,

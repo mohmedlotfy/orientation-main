@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/api/home_api.dart';
 import '../models/area_model.dart';
+import '../utils/auth_helper.dart';
+import 'projects_list_screen.dart';
 
 class AreasScreen extends StatefulWidget {
   const AreasScreen({super.key});
@@ -26,8 +28,33 @@ class _AreasScreenState extends State<AreasScreen> {
       _loading = true;
       _error = null;
     });
+    
+    // Simulate API delay for better UX
+    await Future.delayed(const Duration(milliseconds: 300));
+    
+    // Hardcoded areas since API returns empty
+    // Matches the list in HomeFeedScreen
+    final areaNames = [
+      'Madinaty',
+      'Sheraton',
+      'New Cairo',
+      'North Coast',
+      'New Capital',
+      'Sidi Abdelrhman',
+      'October',
+      'Ras Alhekma',
+      'Mostakbal City',
+      'Maadi',
+      '6th Settlement',
+    ];
+
     try {
-      final list = await _homeApi.getAreas();
+      final list = areaNames.map((name) => AreaModel(
+        id: name.toLowerCase().replaceAll(' ', '_'),
+        name: name,
+        projectsCount: 0, // We could fetch this if needed, but 0 is safe for now
+      )).toList();
+      
       if (mounted) {
         setState(() {
           _areas = list;
@@ -147,7 +174,29 @@ class _AreasScreenState extends State<AreasScreen> {
                 childAspectRatio: 1.2,
               ),
               itemBuilder: (context, index) {
-                return AreaCard(area: _areas[index]);
+                return AreaCard(
+                  area: _areas[index],
+                  onTap: () async {
+                    final area = _areas[index];
+                    /*
+                    // Optional: Require auth before viewing area projects? Home screen does.
+                    final isAuth = await AuthHelper.requireAuth(context);
+                    if (!isAuth) return;
+                    */
+                    
+                    if (mounted) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ProjectsListScreen(
+                            title: 'Projects in ${area.name}',
+                            areaName: area.name,
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                );
               },
             ),
           ),
@@ -159,24 +208,31 @@ class _AreasScreenState extends State<AreasScreen> {
 
 class AreaCard extends StatelessWidget {
   final AreaModel area;
+  final VoidCallback? onTap;
 
-  const AreaCard({super.key, required this.area});
+  const AreaCard({
+    super.key, 
+    required this.area,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        gradient: LinearGradient(
-          colors: [
-            Colors.white.withOpacity(0.08),
-            Colors.white.withOpacity(0.03),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          gradient: LinearGradient(
+            colors: [
+              Colors.white.withOpacity(0.08),
+              Colors.white.withOpacity(0.03),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
         ),
-      ),
-      padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -214,6 +270,7 @@ class AreaCard extends StatelessWidget {
           ],
         ],
       ),
-    );
+      ), // Container
+    ); // GestureDetector
   }
 }
